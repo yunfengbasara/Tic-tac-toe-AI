@@ -1,0 +1,6 @@
+# Prerequisites
+.vs
+
+# Executables
+*.exe
+*.pdb
