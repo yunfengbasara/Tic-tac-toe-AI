@@ -132,6 +132,11 @@ bool util::Neural::CompareSample(
     return true;
 }
 
+void util::Neural::SetLearnRate(float eta)
+{
+    m_fEta = eta;
+}
+
 void util::Neural::SGD()
 {
     // Ç°Ïò´«²¥

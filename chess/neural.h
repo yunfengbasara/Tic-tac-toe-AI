@@ -28,6 +28,8 @@ namespace util
 			float& loss
 		);
 
+		void SetLearnRate(float eta);
+
 		// 随机梯度下降
 		void SGD();
 
@@ -52,7 +54,7 @@ namespace util
 		int m_nBatch = 0;
 
 		// 学习速率
-		float m_fEta = 0.03;
+		float m_fEta = 0.3;
 
 		// 每层节点个数
 		std::vector<int> m_vNetParam;

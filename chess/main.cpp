@@ -17,6 +17,9 @@ using namespace std::chrono;
 using namespace Eigen;
 using namespace util;
 
+// 从本地训练记录开始
+#define START_FROM_RECORD
+
 int main()
 {
     srand((unsigned int)time(0));
@@ -41,11 +44,13 @@ int main()
 
     Neural network;
 
-    // 从0开始的网络
+#ifdef START_FROM_RECORD
+    network.Load(record);
+#else
     network.InitBuild({ insz, 100, outsz });
+#endif
 
-    // 从上一次训练后的网络开始
-    //network.Load(record);
+    network.SetLearnRate(0.3);
 
     // 迭代次数
     int epochs = 1;
@@ -58,11 +63,13 @@ int main()
     
     MatrixXf so;
     float loss = 0;
-    test.ReadRandom(mi, mt, batch);
-    network.CompareSample(mi, mt, so, loss);
-    cout << "before:" << loss << endl;
 
     for (int i = 0; i < epochs; i++) {
+        // 计算loss
+        test.ReadRandom(mi, mt, batch);
+        network.CompareSample(mi, mt, so, loss);
+        std::cout << "loss:" << loss << endl;
+
         auto start = steady_clock::now();
 
         train.Shuffle();
@@ -81,17 +88,41 @@ int main()
             network.SGD();
         }
 
+        // 计算loss
+        test.ReadRandom(mi, mt, batch);
+        network.CompareSample(mi, mt, so, loss);
+        std::cout << "loss:" << loss << endl;
+
+        // 运行时间
         auto elapse = steady_clock::now() - start;
         auto sec = duration_cast<seconds>(elapse);
-        cout << "use " << sec.count() << " seconds" << endl;
+        std::cout << "use " << sec.count() << " seconds" << endl;
     }
 
     // 记录训练后的网络
     network.Save(record);
 
-    test.ReadRandom(mi, mt, batch);
-    network.CompareSample(mi, mt, so, loss);
-    cout << "after:" << loss << endl;
+    // 计算正确率
+    int cnt = 0;
+    for (int i = 0; i < batch; i++) {
+        const auto& col1 = mt.col(i);
+        const auto& col2 = so.col(i);
+        int idx1 = 0, idx2 = 0;
+        for (int j = 0; j < col1.rows(); j++) {
+            if (col1(j) > col1(idx1)) {
+                idx1 = j;
+            }
+
+            if (col2(j) > col2(idx2)) {
+                idx2 = j;
+            }
+        }
+        if (idx1 == idx2) {
+            cnt++;
+        }
+    }
+
+    std::cout << (float)cnt / batch << endl;
 
     return 0;
 }
