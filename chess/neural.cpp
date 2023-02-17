@@ -1,6 +1,9 @@
 #include "neural.h"
+#include "util.h"
+#include <Windows.h>
 
 using namespace Eigen;
+using namespace util;
 
 util::Neural::Neural()
 {
@@ -15,6 +18,15 @@ bool util::Neural::InitBuild(std::vector<int> p)
     if (p.size() < 3) {
         return false;
     }
+
+    m_vBiases.clear();
+    m_vNabla_b.clear();
+    m_vWeights.clear();
+    m_vNabla_w.clear();
+    m_vActivations.clear();
+    m_vInputSum.clear();
+
+    m_vNetParam = p;
 
     // 构建网络
     for (size_t i = 1; i < p.size(); i++) {
@@ -134,14 +146,11 @@ void util::Neural::SGD()
 
 void util::Neural::FeedForward()
 {
-    // 全链路层级
-    size_t len = m_vActivations.size();
-
     // m_vActivations第一层为输入层
     // 每层使用S型激活函数
     // S型激活函数:f(x) = 1/(1+e^(-x))
     // S型激活函数导数:f(x)' = f(x)*(1 - f(x))
-    for (size_t i = 0; i < len - 1; i++) {
+    for (size_t i = 0; i < m_vNetParam.size() - 1; i++) {
         m_vInputSum[i] = (m_vWeights[i] * m_vActivations[i]).colwise() + m_vBiases[i];
         m_vActivations[i + 1] = 1.0f / (1.0f + (-m_vInputSum[i]).array().exp());
     }
@@ -161,8 +170,7 @@ void util::Neural::BackProp()
     m_vNabla_w.back() = delta * lz.transpose();
 
     // backprop反向传播
-    size_t len = m_vActivations.size();
-    for (size_t i = 1; i < len - 1; i++) {
+    for (size_t i = 1; i < m_vNetParam.size() - 1; i++) {
         const MatrixXf& z = *(m_vActivations.rbegin() + i);
         MatrixXf sg = z.array() * (1.0f - z.array());
         const MatrixXf& w = *(m_vWeights.rbegin() + i - 1);
@@ -185,4 +193,162 @@ void util::Neural::Update()
     for (size_t i = 0; i < m_vWeights.size(); i++) {
         m_vWeights[i] -= (m_fEta * m_vNabla_w[i] / m_nBatch);
     }
+}
+
+bool util::Neural::Save(const std::wstring& path)
+{
+    // 计算保存文件大小
+    DWORD filesize = 0;
+
+    // 层数解构:层数+每层节点个数
+    filesize += m_vNetParam.size();
+    filesize += m_vNetParam.size() * sizeof(DWORD);
+    // 学习速度
+    filesize += sizeof(m_fEta);
+    // Biases大小
+    for (auto& b : m_vBiases) {
+        filesize += b.size() * sizeof(float);
+    }
+    // Weights大小
+    for (auto& w : m_vWeights) {
+        filesize += w.size() * sizeof(float);
+    }
+
+    HANDLE hFile = INVALID_HANDLE_VALUE;
+    HANDLE hMap = NULL;
+    LPBYTE lpMem = NULL;
+
+    defer(
+        if (lpMem != NULL) {
+            ::UnmapViewOfFile(lpMem);
+        }
+        if (hMap != NULL) {
+            ::CloseHandle(hMap);
+        }
+        if (hFile != INVALID_HANDLE_VALUE) {
+            ::CloseHandle(hFile);
+        }
+    );
+
+    hFile = ::CreateFile(path.c_str(), 
+        GENERIC_READ | GENERIC_WRITE, 
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        NULL, 
+        CREATE_ALWAYS, 
+        FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hFile == INVALID_HANDLE_VALUE) {
+        return false;
+    }
+
+    hMap = ::CreateFileMapping(hFile, NULL, PAGE_READWRITE, 0, filesize, NULL);
+    if (hMap == NULL) {
+        return false;
+    }
+
+    lpMem = (LPBYTE)::MapViewOfFile(hMap, FILE_MAP_ALL_ACCESS, 0, 0, 0);
+    if (lpMem == NULL) {
+        return false;
+    }
+
+    // 文件操作位置
+    DWORD startfile = 0;
+
+    DWORD layered = m_vNetParam.size();
+    *(DWORD*)(lpMem + startfile) = layered;
+    startfile += sizeof(layered);
+
+    for (auto& n : m_vNetParam) {
+        *(DWORD*)(lpMem + startfile) = n;
+        startfile += sizeof(DWORD);
+    }
+
+    *(float*)(lpMem + startfile) = m_fEta;
+    startfile += sizeof(m_fEta);
+
+    for (auto& b : m_vBiases) {
+        DWORD len = b.size() * sizeof(float);
+        memcpy(lpMem + startfile, b.data(), len);
+        startfile += len;
+    }
+
+    for (auto& w : m_vWeights) {
+        DWORD len = w.size() * sizeof(float);
+        memcpy(lpMem + startfile, w.data(), len);
+        startfile += len;
+    }
+
+    return true;
+}
+
+bool util::Neural::Load(const std::wstring& path)
+{
+    HANDLE hFile = INVALID_HANDLE_VALUE;
+    HANDLE hMap = NULL;
+    LPBYTE lpMem = NULL;
+
+    defer(
+        if (lpMem != NULL) {
+            ::UnmapViewOfFile(lpMem);
+        }
+        if (hMap != NULL) {
+            ::CloseHandle(hMap);
+        }
+        if (hFile != INVALID_HANDLE_VALUE) {
+            ::CloseHandle(hFile);
+        }
+    );
+
+    hFile = ::CreateFile(path.c_str(),
+        GENERIC_READ | GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        NULL,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hFile == INVALID_HANDLE_VALUE) {
+        return false;
+    }
+
+    hMap = ::CreateFileMapping(hFile, NULL, PAGE_READWRITE, 0, 0, NULL);
+    if (hMap == NULL) {
+        return false;
+    }
+
+    lpMem = (LPBYTE)::MapViewOfFile(hMap, FILE_MAP_ALL_ACCESS, 0, 0, 0);
+    if (lpMem == NULL) {
+        return false;
+    }
+
+    // 文件读取位置
+    DWORD startfile = 0;
+
+    // 网络层数
+    DWORD layered = *(DWORD*)(lpMem + startfile);
+    startfile += sizeof(layered);
+
+    m_vNetParam.resize(layered);
+    for (auto& n : m_vNetParam) {
+        n = *(DWORD*)(lpMem + startfile);
+        startfile += sizeof(DWORD);
+    }
+
+    m_fEta = *(float*)(lpMem + startfile);
+    startfile += sizeof(m_fEta);
+
+    if (!InitBuild(m_vNetParam)) {
+        return false;
+    }
+
+    for (auto& b : m_vBiases) {
+        float* pf = (float*)(lpMem + startfile);
+        b = Map<VectorXf>(pf, b.size());
+        startfile += b.size() * sizeof(float);
+    }
+
+    for (auto& w : m_vWeights) {
+        float* pf = (float*)(lpMem + startfile);
+        w = Map<MatrixXf>(pf, w.rows(), w.cols());
+        startfile += w.size() * sizeof(float);
+    }
+
+    return true;
 }

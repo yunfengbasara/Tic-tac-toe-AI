@@ -1,6 +1,7 @@
 #pragma once
 #include <vector>
-#include "../Eigen/Dense"
+#include <string>
+#include "../Eigen/Core"
 
 namespace util
 {
@@ -10,7 +11,7 @@ namespace util
 		Neural();
 		~Neural();
 
-		// 初始化(调用一次)
+		// 初始化
 		bool InitBuild(std::vector<int> p);
 
 		// 样本输入
@@ -30,6 +31,13 @@ namespace util
 		// 随机梯度下降
 		void SGD();
 
+		// 保存
+		bool Save(const std::wstring& path);
+
+		// 读取
+		bool Load(const std::wstring& path);
+
+	private:
 		// 前向计算
 		void FeedForward();
 
@@ -45,6 +53,9 @@ namespace util
 
 		// 学习速率
 		float m_fEta = 0.03;
+
+		// 每层节点个数
+		std::vector<int> m_vNetParam;
 
 		// 比较目标
 		Eigen::MatrixXf	m_mTarget;

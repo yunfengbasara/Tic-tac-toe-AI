@@ -2,7 +2,7 @@
 #include <Windows.h>
 #include <string>
 #include <vector>
-#include "../Eigen/Dense"
+#include "../Eigen/Core"
 
 namespace util
 {
