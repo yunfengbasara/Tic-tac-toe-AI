@@ -38,4 +38,12 @@
       <Filter>util</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="neuralex.cu">
+      <Filter>util</Filter>
+    </None>
+    <None Include="neuralex.cuh">
+      <Filter>util</Filter>
+    </None>
+  </ItemGroup>
 </Project>

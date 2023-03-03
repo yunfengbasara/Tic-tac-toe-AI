@@ -10,6 +10,7 @@
 #include "util.h"
 #include "Analyze.h"
 #include "neural.h"
+#include "neuralex.cuh"
 #include "../Eigen/Core"
 
 using namespace std;
@@ -100,7 +101,7 @@ int main()
     }
 
     // 记录训练后的网络
-    network.Save(record);
+    //network.Save(record);
 
     // 计算正确率
     int cnt = 0;
