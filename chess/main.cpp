@@ -10,7 +10,7 @@
 #include "util.h"
 #include "Analyze.h"
 #include "neural.h"
-#include "neuralex.cuh"
+#include "neuralex.h"
 #include "../Eigen/Core"
 
 using namespace std;
@@ -23,6 +23,14 @@ using namespace util;
 
 int main()
 {
+    HOSTMatrix ma(1130, 1230);
+    ma.setRandom();
+
+    NeuralEx mu;
+
+    cout << "finsh";
+    return 0;
+
     srand((unsigned int)time(0));
 
     // 网络参数本地记录

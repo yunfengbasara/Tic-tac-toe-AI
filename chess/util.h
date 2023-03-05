@@ -22,4 +22,6 @@ namespace util
 {
 	// 获取当前运行路径
 	std::wstring GetCurrentDir();
+
+
 }

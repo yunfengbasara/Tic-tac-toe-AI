@@ -26,6 +26,12 @@
     <ClCompile Include="util.cpp">
       <Filter>util</Filter>
     </ClCompile>
+    <ClCompile Include="neuralex.h">
+      <Filter>util</Filter>
+    </ClCompile>
+    <ClCompile Include="neuralex.cpp">
+      <Filter>util</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Analyze.h">
@@ -39,10 +45,7 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="neuralex.cu">
-      <Filter>util</Filter>
-    </None>
-    <None Include="neuralex.cuh">
+    <None Include="neuralex_kernel.cu">
       <Filter>util</Filter>
     </None>
   </ItemGroup>
