@@ -1,34 +1,10 @@
 #pragma once
 #include <vector>
 #include <string>
-#include "../Eigen/Core"
+#include "type.h"
 
 namespace util
 {
-	// 整个网络采用float类型
-	#define FZ	sizeof(float)
-
-	// 由于CUDA中的矩阵按照行优先排列,因此定义按行优先的CPU矩阵
-	typedef Eigen::Matrix<
-		float, 
-		Eigen::Dynamic, 
-		Eigen::Dynamic, 
-		Eigen::RowMajor> HOSTMatrix;
-
-	// 定义CUDA中用到的矩阵结构
-	struct CUDAMatrix {
-		size_t rows			=	0;		// 矩阵行数,height
-		size_t cols			=	0;		// 矩阵列数,width
-		size_t stride		=	0;		// 一行字节大小:cols * FZ
-		size_t size			=	0;		// 矩阵全部字节大小:stride * rows
-		size_t pitch		=	0;		// 经过cuda对齐后的一行字节大小
-		size_t pitchcols	=	0;		// 经过cuda对齐后的一行元素个数:pitch / FZ
-		float* data			=	nullptr;// 矩阵数据
-
-		bool Create(const HOSTMatrix& hostm);
-		bool Destroy();
-	};
-
 	class NeuralEx
 	{
 	public:

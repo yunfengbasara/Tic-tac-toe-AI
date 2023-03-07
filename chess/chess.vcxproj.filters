@@ -32,6 +32,12 @@
     <ClCompile Include="neuralex.cpp">
       <Filter>util</Filter>
     </ClCompile>
+    <ClCompile Include="trans.cpp">
+      <Filter>util</Filter>
+    </ClCompile>
+    <ClCompile Include="type.cpp">
+      <Filter>util</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Analyze.h">
@@ -41,6 +47,12 @@
       <Filter>util</Filter>
     </ClInclude>
     <ClInclude Include="util.h">
+      <Filter>util</Filter>
+    </ClInclude>
+    <ClInclude Include="trans.h">
+      <Filter>util</Filter>
+    </ClInclude>
+    <ClInclude Include="type.h">
       <Filter>util</Filter>
     </ClInclude>
   </ItemGroup>

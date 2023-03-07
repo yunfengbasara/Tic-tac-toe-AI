@@ -4,104 +4,98 @@
 #include <chrono>
 #include <iostream>
 #include "cuda_runtime.h"
-#include "cuda.h"
 
 using namespace Eigen;
 using namespace util;
 using namespace std;
 using namespace std::chrono;
 
-
-bool util::CUDAMatrix::Create(const HOSTMatrix& hostm)
-{
-    cols = hostm.cols();
-    rows = hostm.rows();
-    stride = cols * FZ;
-    
-    cudaError_t st = cudaMallocPitch(
-        &data, &pitch, stride, rows);
-
-    pitchcols = pitch / FZ;
-    size = stride * rows;
-
-    if (st != cudaSuccess) {
-        return false;
-    }
-
-	return true;
-}
-
-bool util::CUDAMatrix::Destroy()
-{
-    cudaError_t st = cudaFree(data);
-    if (st != cudaSuccess) {
-        return false;
-    }
-
-    *this = CUDAMatrix();
-
-	return true;
-}
-
 util::NeuralEx::NeuralEx()
 {
-    HOSTMatrix ma(3600, 777);
+    std::vector<char> cubin;
+    if (!CompileFileToCUBIN(L"neuralex_kernel.cu", cubin)) {
+        return;
+    }
+
+    CUmodule module;
+    if (!LoadCUBIN(cubin, module)) {
+        return;
+    }
+
+    HOSTMatrix ma(3667, 366);
     ma.setRandom();
 
     CUDAMatrix cuma;
-    cuma.Create(ma);
+    CreateCUDAMatrix(ma, cuma);
 
-    HOSTMatrix mb(3600, 1);
+    HOSTMatrix mb(3667, 1);
 
     CUDAMatrix cumc;
-    cumc.Create(mb);
+    CreateCUDAMatrix(mb, cumc);
 
-    cudaStream_t stream;
-    cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking);
+    CUresult ret;
+    const char* errorStr = NULL;
 
-    cudaMemcpy2DAsync(cuma.data, cuma.pitch,
-        ma.data(), ma.cols() * FZ,
-        ma.cols() * FZ, ma.rows(),
-        cudaMemcpyHostToDevice, stream);
+    CUstream stream;
+    ret = cuStreamCreate(&stream, cudaStreamNonBlocking);
+    cuGetErrorString(ret, &errorStr);
 
-    //matrixSumCuda2 << <cuma.h, cuma.w, cuma.w * FZ, stream >> > (cuma, cumc);
+    CopyHostToCUDA(ma, cuma, stream);
 
-    cudaError_t err = cudaStreamSynchronize(stream);
+    CUfunction kernel_addr;
+    if (cuModuleGetFunction(&kernel_addr, module, 
+            "reduction") != CUDA_SUCCESS) {
+        return;
+    }
 
-    VectorXf mc2(cumc.rows);
-    cudaMemcpy2DAsync(mc2.data(), mc2.cols() * FZ,
-        cumc.data, cumc.pitch,
-        mc2.cols() * FZ, mc2.rows(),
-        cudaMemcpyDeviceToHost, stream);
+    void* arr[] = { 
+        (void*)&cuma.data, (void*)&cuma.pitchcols, 
+        (void*)&cumc.data, (void*)&cumc.pitchcols
+    };
+    ret = cuLaunchKernel(kernel_addr,
+        cuma.height, 1, 1,
+        cuma.width, 1, 1,
+        cuma.stride, stream,
+        &arr[0], 0);
+    cuGetErrorString(ret, &errorStr);
+    
+    ret = cuStreamSynchronize(stream);
+    cuGetErrorString(ret, &errorStr);
 
-    cudaStreamSynchronize(stream);
-    cudaStreamDestroy(stream);
+    HOSTMatrix mc2(cumc.height, 1);
 
-    cuma.Destroy();
-    cumc.Destroy();
+    CopyCUDAToHost(cumc, mc2, stream);
 
-    //bool ok = true;
-    //float eps = 1.e-4;
-    //const auto& c1 = mc1.array();
-    //const auto& c2 = mc2.array();
-    //for (int i = 0; i < mc1.size(); i++) {
-    //    if (fabs(c1(i) - c2(i)) > eps) {
-    //        cout << i << endl;
-    //        cout << "-------" << endl;
-    //        cout << c1(i) << endl;
-    //        cout << "-------" << endl;
-    //        cout << c2(i) << endl;
-    //        ok = false;
-    //        break;
-    //    }
-    //}
+    cuStreamSynchronize(stream);
+    cuStreamDestroy(stream);
 
-    //if (ok) {
-    //    cout << "PASS";
-    //}
-    //else {
-    //    cout << "WRONG!!!";
-    //}
+    DestroyCUDAMatrix(cuma);
+    DestroyCUDAMatrix(cumc);
+
+    VectorXf mc1 = ma.rowwise().sum();
+
+    bool ok = true;
+    float eps = 1.e-4;
+    const auto& c1 = mc1.array();
+    const auto& c2 = mc2.array();
+    for (int i = 0; i < mc1.size(); i++) {
+        if (fabs(c1(i) - c2(i)) > eps) {
+            cout << i << endl;
+            cout << "-------" << endl;
+            cout << c1(i) << endl;
+            cout << "-------" << endl;
+            cout << c2(i) << endl;
+            ok = false;
+            break;
+        }
+    }
+
+    if (ok) {
+        cout << "PASS";
+    }
+    else {
+        cout << "WRONG!!!";
+    }
 }
 
 util::NeuralEx::~NeuralEx()
@@ -163,34 +157,34 @@ bool util::NeuralEx::InitBuild(std::vector<int> p)
 void util::NeuralEx::Release()
 {
     for (auto& item : m_vBiases) {
-        item.Destroy();
+        DestroyCUDAMatrix(item);
     }
     m_vBiases.clear();
 
     for (auto& item : m_vNabla_b) {
-        item.Destroy();
+        DestroyCUDAMatrix(item);
     }
     m_vNabla_b.clear();
 
     for (auto& item : m_vWeights) {
-        item.Destroy();
+        DestroyCUDAMatrix(item);
     }
     m_vWeights.clear();
 
     for (auto& item : m_vNabla_w) {
-        item.Destroy();
+        DestroyCUDAMatrix(item);
     }
     m_vNabla_w.clear();
 
     for (auto& item : m_vActivations) {
-        item.Destroy();
+        DestroyCUDAMatrix(item);
     }
     m_vActivations.clear();
 
     for (auto& item : m_vInputSum) {
-        item.Destroy();
+        DestroyCUDAMatrix(item);
     }
     m_vInputSum.clear();
 
-    m_mTarget.Destroy();
+    DestroyCUDAMatrix(m_mTarget);
 }
