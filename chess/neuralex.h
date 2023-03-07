@@ -2,6 +2,7 @@
 #include <vector>
 #include <string>
 #include "type.h"
+#include "cuda.h"
 
 namespace util
 {
@@ -16,8 +17,8 @@ namespace util
 
 		// 样本输入
 		bool SetSample(
-			Eigen::MatrixXf& in,
-			Eigen::MatrixXf& target
+			HOSTMatrix& in,
+			HOSTMatrix& target
 		);
 
 		// 样本比对
@@ -72,10 +73,10 @@ namespace util
 		// 每层输入和
 		std::vector<CUDAMatrix> m_vInputSum;
 
-		// 每层偏移 cols = 1
+		// 每层偏移 w = 1
 		std::vector<CUDAMatrix> m_vBiases;
 
-		// 偏移临时记录 cols = 1
+		// 偏移临时记录 w = 1
 		std::vector<CUDAMatrix> m_vNabla_b;
 
 		// 每层节点权重
@@ -85,5 +86,20 @@ namespace util
 
 		// 权重临时记录
 		std::vector<CUDAMatrix> m_vNabla_w;
+
+		// cuda流事件
+		CUstream m_nStream = nullptr;
+
+		// cubin模块
+		CUmodule m_nModule = nullptr;
+
+		// cuda函数
+		CUfunction m_fMatrixMul = nullptr;
+		CUfunction m_fReduction = nullptr;
+		CUfunction m_fColwiseAdd = nullptr;
+
+		// 求和矩阵乘积临时变量
+		std::vector<CUDAMatrix> m_vInputMulTmp;
+
 	};
 }

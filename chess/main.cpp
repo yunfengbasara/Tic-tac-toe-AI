@@ -23,12 +23,10 @@ using namespace util;
 
 int main()
 {
-    HOSTMatrix ma(1130, 1230);
-    ma.setRandom();
+    NeuralEx networkex;
+    networkex.InitBuild({ 700, 100, 10 });
+    networkex.SGD();
 
-    NeuralEx mu;
-
-    cout << "finsh";
     return 0;
 
     srand((unsigned int)time(0));

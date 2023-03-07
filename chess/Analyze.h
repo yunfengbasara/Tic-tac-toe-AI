@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include "../Eigen/Core"
+#include "type.h"
 
 namespace util
 {

@@ -6,24 +6,34 @@ using namespace Eigen;
 using namespace util;
 using namespace std;
 
-CUresult util::CreateCUDAMatrix(
-    const HOSTMatrix& hostm, 
-    CUDAMatrix& cudam)
+CUDAMatrix util::CreateCUDAMatrix(const HOSTMatrix& hostm)
 {
-    CUresult ret;
+    CUDAMatrix cudam;
 
-    cudam.width = hostm.cols();
-    cudam.height = hostm.rows();
+    cudam = CreateCUDAMatrix(
+        hostm.rows(), 
+        hostm.cols());
+
+    CopyHostToCUDA(hostm, cudam);
+    return cudam;
+}
+
+CUDAMatrix util::CreateCUDAMatrix(int h, int w)
+{
+    CUDAMatrix cudam;
+
+    cudam.height = h;
+    cudam.width = w;
     cudam.stride = cudam.width * EZ;
     cudam.size = cudam.stride * cudam.height;
 
-    ret = cuMemAllocPitch(
-        &cudam.data, &cudam.pitch, 
+    cuMemAllocPitch(
+        &cudam.data, &cudam.pitch,
         cudam.stride, cudam.height, EZ);
 
-    cudam.pitchcols = cudam.pitch / EZ;
+    cudam.pitchwidth = cudam.pitch / EZ;
 
-    return ret;
+    return cudam;
 }
 
 CUresult util::DestroyCUDAMatrix(
@@ -38,7 +48,7 @@ CUresult util::DestroyCUDAMatrix(
 }
 
 CUresult util::CopyHostToCUDA(
-    HOSTMatrix& hostm,
+    const HOSTMatrix& hostm,
     CUDAMatrix& cudam, 
     CUstream stream)
 {
@@ -64,13 +74,18 @@ CUresult util::CopyHostToCUDA(
     work.WidthInBytes = cudam.stride;
     work.Height = cudam.height;
 
-    ret = cuMemcpy2DAsync(&work, stream);
+    if (stream == nullptr) {
+        ret = cuMemcpy2D(&work);
+    }
+    else {
+        ret = cuMemcpy2DAsync(&work, stream);
+    }
 
     return ret;
 }
 
 CUresult util::CopyCUDAToHost(
-    CUDAMatrix& cudam, 
+    const CUDAMatrix& cudam, 
     HOSTMatrix& hostm, 
     CUstream stream)
 {
@@ -96,7 +111,12 @@ CUresult util::CopyCUDAToHost(
     work.WidthInBytes = cudam.stride;
     work.Height = cudam.height;
 
-    ret = cuMemcpy2DAsync(&work, stream);
+    if (stream == nullptr) {
+        ret = cuMemcpy2D(&work);
+    }
+    else {
+        ret = cuMemcpy2DAsync(&work, stream);
+    }
 
     return ret;
 }
