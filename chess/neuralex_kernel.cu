@@ -78,6 +78,51 @@ extern "C" __global__ void matrixMul(
 }
 
 /*
+* 转置b矩阵乘法
+*/
+extern "C" __global__ void mulTransB(
+    float* a, int apw,
+    float* b, int bpw,
+    float* c, int cpw)
+{
+    int bx = blockIdx.x;
+    int by = blockIdx.y;
+
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
+
+    int aBegin = apw * BLOCK_SIZE * by;
+    int aStep = BLOCK_SIZE;
+    int aEnd = aBegin + apw - 1;
+
+    int bBegin = bpw * BLOCK_SIZE * bx;
+    int bStep = BLOCK_SIZE;
+
+    float sumC = 0;
+
+    for (int ia = aBegin, ib = bBegin;
+        ia <= aEnd; ia += aStep, ib += bStep) {
+        __shared__ float AS[BLOCK_SIZE][BLOCK_SIZE];
+        __shared__ float BS[BLOCK_SIZE][BLOCK_SIZE];
+
+        AS[ty][tx] = a[ia + ty * apw + tx];
+        BS[ty][tx] = b[ib + ty * bpw + tx];
+
+        __syncthreads();
+
+        for (int k = 0; k < BLOCK_SIZE; k++) {
+            sumC += AS[ty][k] * BS[ty][k];
+        }
+
+        __syncthreads();
+    }
+
+    int cBlock = cpw * BLOCK_SIZE * by + bx * BLOCK_SIZE;
+    int cThread = cpw * ty + tx;
+    c[cBlock + cThread] = sumC;
+}
+
+/*
 * 矩阵A的每一列和B相加
 * B是只有一列的矩阵
 * C[x][n] = A[x][n] + B[x][0]
@@ -114,4 +159,38 @@ extern "C" __global__ void activation(
     tmp = 1.0f / (1.0f + expf(-tmp));
 
     b[bpw * bx + tx] = tmp;
+}
+
+/*
+* 激活函数导数
+*/
+extern "C" __global__ void activatePrime(
+    float* a, int apw,
+    float* b, int bpw)
+{
+    int bx = blockIdx.x;
+    int tx = threadIdx.x;
+
+    float tmp = a[apw * bx + tx];
+    tmp = tmp * (1 - tmp);
+
+    b[bpw * bx + tx] = tmp;
+}
+
+/*
+* 计算偏移导数
+*/
+extern "C" __global__ void deltaTarget(
+    float* a, int apw,
+    float* b, int bpw,
+    float* c, int cpw,
+    float* d, int dpw)
+{
+    int bx = blockIdx.x;
+    int tx = threadIdx.x;
+
+    float tmp = a[apw * bx + tx] - b[bpw * bx + tx];
+    tmp *= c[cpw * bx + tx];
+
+    d[dpw * bx + tx] = tmp;
 }

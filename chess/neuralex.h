@@ -98,6 +98,8 @@ namespace util
 		CUfunction m_fReduction = nullptr;
 		CUfunction m_fColwiseAdd = nullptr;
 		CUfunction m_fActivation = nullptr;
-
+		CUfunction m_fActivatePrime = nullptr;
+		CUfunction m_fDeltaTarget = nullptr;
+		CUfunction m_fMulTransB = nullptr;
 	};
 }
