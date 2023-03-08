@@ -2,7 +2,6 @@
 * 规约算法 矩阵每行求和
 * C[x][0] = C[x][0] + C[x][1] + ... + C[x][n]
 */
-
 extern "C" __global__ void reduction(
     float* a, int apw, 
     float* c, int cpw)
@@ -88,5 +87,31 @@ extern "C" __global__ void colwiseAdd(
     float* b, int bpw,
     float* c, int cpw)
 {
+    int bx = blockIdx.x;
+    int tx = threadIdx.x;
 
+    __shared__ float tmp;
+    if (tx == 0) {
+        int bIdx = bpw * bx;
+        tmp = b[bIdx];
+    }
+    __syncthreads();
+
+    c[cpw * bx + tx] = a[apw * bx + tx] + tmp;
+}
+
+/*
+* 激活函数
+*/
+extern "C" __global__ void activation(
+    float* a, int apw,
+    float* b, int bpw)
+{
+    int bx = blockIdx.x;
+    int tx = threadIdx.x;
+
+    float tmp = a[apw * bx + tx];
+    tmp = 1.0f / (1.0f + expf(-tmp));
+
+    b[bpw * bx + tx] = tmp;
 }

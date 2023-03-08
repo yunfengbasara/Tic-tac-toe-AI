@@ -23,13 +23,13 @@ using namespace util;
 
 int main()
 {
+    srand((unsigned int)time(0));
+
     NeuralEx networkex;
     networkex.InitBuild({ 700, 100, 10 });
     networkex.SGD();
 
     return 0;
-
-    srand((unsigned int)time(0));
 
     // 网络参数本地记录
     std::wstring record = GetCurrentDir() + L"neural";

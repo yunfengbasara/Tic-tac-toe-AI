@@ -97,9 +97,7 @@ namespace util
 		CUfunction m_fMatrixMul = nullptr;
 		CUfunction m_fReduction = nullptr;
 		CUfunction m_fColwiseAdd = nullptr;
-
-		// 求和矩阵乘积临时变量
-		std::vector<CUDAMatrix> m_vInputMulTmp;
+		CUfunction m_fActivation = nullptr;
 
 	};
 }

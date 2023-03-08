@@ -46,6 +46,9 @@ util::NeuralEx::NeuralEx()
 
     checkCudaErrors(cuModuleGetFunction(
         &m_fColwiseAdd, m_nModule, "colwiseAdd"));
+
+    checkCudaErrors(cuModuleGetFunction(
+        &m_fActivation, m_nModule, "activation"));
 }
 
 util::NeuralEx::~NeuralEx()
@@ -107,13 +110,6 @@ bool util::NeuralEx::InitBuild(std::vector<int> p)
     }
 
     m_mTarget = CreateCUDAMatrix(p.back(), m_nBatch);
-
-    for (size_t i = 0; i < p.size() - 1; i++) {
-        CUDAMatrix cm = CreateCUDAMatrix(
-            m_vWeights[i].height, 
-            m_vActivations[i].width);
-        m_vInputMulTmp.push_back(cm);
-    }
     return true;
 }
 
@@ -167,18 +163,6 @@ bool util::NeuralEx::SetSample(HOSTMatrix& in, HOSTMatrix& target)
         m_vInputSum.push_back(cm);
     }
 
-    // 构建输入和矩阵乘法临时层
-    for (auto& item : m_vInputMulTmp) {
-        DestroyCUDAMatrix(item);
-    }
-    m_vInputMulTmp.clear();
-    for (size_t i = 0; i < m_vNetParam.size() - 1; i++) {
-        CUDAMatrix cm = CreateCUDAMatrix(
-            m_vWeights[i].height,
-            m_vActivations[i].width);
-        m_vInputMulTmp.push_back(cm);
-    }
-
     CopyHostToCUDA(in, m_vActivations[0]);
     CopyHostToCUDA(target, m_mTarget);
     return true;
@@ -208,32 +192,50 @@ void util::NeuralEx::FeedForward()
     // S型激活函数:f(x) = 1/(1+e^(-x))
     // S型激活函数导数:f(x)' = f(x)*(1 - f(x))
     for (size_t i = 0; i < m_vNetParam.size() - 1; i++) {
-        int width = m_vInputMulTmp[i].width;
-        int height = m_vInputMulTmp[i].height;
+        int width = m_vInputSum[i].width;
+        int height = m_vInputSum[i].height;
 
         dim3 block(BLOCK_SIZE, BLOCK_SIZE);
         int gx = (width + block.x - 1) / block.x;
         int gy = (height + block.y - 1) / block.y;
 
-        // 计算每层输出和权重乘积
+        // 输出和权重乘积
         void* mulparams[] = 
         {
             (void*)&m_vWeights[i].data, (void*)&m_vWeights[i].pitchwidth,
             (void*)&m_vActivations[i].data, (void*)&m_vActivations[i].pitchwidth,
-            (void*)&m_vInputMulTmp[i].data, (void*)&m_vInputMulTmp[i].pitchwidth
+            (void*)&m_vInputSum[i].data, (void*)&m_vInputSum[i].pitchwidth
         };
 
         checkCudaErrors(cuLaunchKernel(m_fMatrixMul,
-            gx, gy, 1,
-            block.x, block.y, 1,
-            0, m_nStream,
-            &mulparams[0], 0));
+            gx, gy, 1, block.x, block.y, 1,
+            0, m_nStream, &mulparams[0], 0));
         checkCudaErrors(cuStreamSynchronize(m_nStream));
 
-        // m_vInputMulTmp矩阵每一列代表一个样例,每一列和m_vBiases求和
-        
-        //m_fColwiseAdd
+        // 计算偏移
+        void* addparams[] = 
+        {
+            (void*)&m_vInputSum[i].data, (void*)&m_vInputSum[i].pitchwidth,
+            (void*)&m_vBiases[i].data, (void*)&m_vBiases[i].pitchwidth,
+            (void*)&m_vInputSum[i].data, (void*)&m_vInputSum[i].pitchwidth
+        };
 
+        checkCudaErrors(cuLaunchKernel(m_fColwiseAdd,
+            height, 1, 1, width, 1, 1,
+            0, m_nStream, &addparams[0], 0));
+        checkCudaErrors(cuStreamSynchronize(m_nStream));
+
+        // 激活
+        void* actparams[] =
+        {
+            (void*)&m_vInputSum[i].data, (void*)&m_vInputSum[i].pitchwidth,
+            (void*)&m_vActivations[i + 1].data, (void*)&m_vActivations[i + 1].pitchwidth
+        };
+
+        checkCudaErrors(cuLaunchKernel(m_fActivation,
+            height, 1, 1, width, 1, 1,
+            0, m_nStream, &actparams[0], 0));
+        checkCudaErrors(cuStreamSynchronize(m_nStream));
 
         // 计算按行求和
         //void* params1[] = 
@@ -249,33 +251,28 @@ void util::NeuralEx::FeedForward()
         //    &params1[0], 0));
         //checkCudaErrors(cuStreamSynchronize(m_nStream));
 
-       /* HOSTMatrix am(m_vWeights[i].height, m_vWeights[i].width);
-        CopyCUDAToHost(m_vWeights[i], am, m_nStream);
+        //HOSTMatrix bm(m_vInputMulTmp[i].height, m_vInputMulTmp[i].width);
+        //CopyCUDAToHost(m_vInputMulTmp[i], bm, m_nStream);
 
-        HOSTMatrix bm(m_vActivations[i].height, m_vActivations[i].width);
-        CopyCUDAToHost(m_vActivations[i], bm, m_nStream);
+        //HOSTMatrix am(m_vBiases[i].height, m_vBiases[i].width);
+        //CopyCUDAToHost(m_vBiases[i], am, m_nStream);
 
-        HOSTMatrix mc1 = am * bm;
-        HOSTMatrix mc2(height, width);
-        CopyCUDAToHost(m_vInputMulTmp[i], mc2);
+        //HOSTMatrix mc1 = bm.colwise() + am.col(0);
+        //HOSTMatrix mc2(m_vInputSum[i].height, m_vInputSum[i].width);
+        //CopyCUDAToHost(m_vInputSum[i], mc2, m_nStream);
 
-        float eps = 1.e-4;
-        const auto& c1 = mc1.array();
-        const auto& c2 = mc2.array();
-        for (int i = 0; i < mc1.size(); i++) {
-            if (fabs(c1(i) - c2(i)) > eps) {
-                cout << i << endl;
-                cout << c1(i) << endl;
-                cout << c2(i) << endl;
-                break;
-            }
-        }*/
-
-       // m_vInputSum[i] = (m_vWeights[i] * m_vActivations[i]).colwise() + m_vBiases[i];
-       // m_vActivations[i + 1] = 1.0f / (1.0f + (-m_vInputSum[i]).array().exp());
+        //float eps = 1.e-4;
+        //const auto& c1 = mc1.array();
+        //const auto& c2 = mc2.array();
+        //for (int i = 0; i < mc1.size(); i++) {
+        //    if (fabs(c1(i) - c2(i)) > eps) {
+        //        cout << i << endl;
+        //        cout << c1(i) << endl;
+        //        cout << c2(i) << endl;
+        //        break;
+        //    }
+        //}
     }
-
-    checkCudaErrors(cuStreamSynchronize(m_nStream));
 }
 
 void util::NeuralEx::BackProp()
@@ -319,11 +316,6 @@ void util::NeuralEx::Release()
     m_vInputSum.clear();
 
     DestroyCUDAMatrix(m_mTarget);
-
-    for (auto& item : m_vInputMulTmp) {
-        DestroyCUDAMatrix(item);
-    }
-    m_vInputMulTmp.clear();
 
     if (m_nStream != nullptr) {
         cuStreamDestroy(m_nStream);
