@@ -111,7 +111,7 @@ extern "C" __global__ void mulTransB(
         __syncthreads();
 
         for (int k = 0; k < BLOCK_SIZE; k++) {
-            sumC += AS[ty][k] * BS[ty][k];
+            sumC += AS[ty][k] * BS[tx][k];
         }
 
         __syncthreads();

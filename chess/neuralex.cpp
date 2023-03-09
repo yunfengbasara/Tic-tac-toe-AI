@@ -114,6 +114,14 @@ bool util::NeuralEx::InitBuild(std::vector<int> p)
         m_vActivations.push_back(cm);
     }
 
+    for (size_t i = 0; i < p.size(); i++) {
+        CUDAMatrix cm = CreateCUDAMatrix(p[i], m_nBatch);
+        m_vDelta.push_back(cm);
+    }
+
+    CUDAMatrix z = m_vActivations.back();
+    m_nSG = CreateCUDAMatrix(z.height, z.width);
+
     for (size_t i = 1; i < p.size(); i++) {
         CUDAMatrix cm = CreateCUDAMatrix(p[i], m_nBatch);
         m_vInputSum.push_back(cm);
@@ -158,10 +166,25 @@ bool util::NeuralEx::SetSample(HOSTMatrix& in, HOSTMatrix& target)
     }
     m_vActivations.clear();
 
+    for (auto& item : m_vDelta) {
+        DestroyCUDAMatrix(item);
+    }
+    m_vDelta.clear();
+
+    DestroyCUDAMatrix(m_nSG);
+
     for (size_t i = 0; i < m_vNetParam.size(); i++) {
         CUDAMatrix cm = CreateCUDAMatrix(m_vNetParam[i], m_nBatch);
         m_vActivations.push_back(cm);
     }
+
+    for (size_t i = 0; i < m_vNetParam.size(); i++) {
+        CUDAMatrix cm = CreateCUDAMatrix(m_vNetParam[i], m_nBatch);
+        m_vDelta.push_back(cm);
+    }
+
+    CUDAMatrix z = m_vActivations.back();
+    m_nSG = CreateCUDAMatrix(z.height, z.width);
 
     // 构建输入和层
     for (auto& item : m_vInputSum) {
@@ -190,7 +213,8 @@ void util::NeuralEx::SGD()
     FeedForward();
 
     // 反向矫正
-    BackProp();
+    BackPropLast();
+    BackPropLine();
 
     // batch处理完后更新参数
     Update();
@@ -250,13 +274,13 @@ void util::NeuralEx::FeedForward()
     }
 }
 
-void util::NeuralEx::BackProp()
+void util::NeuralEx::BackPropLast()
 {
     // 求目标误差
     // 误差函数:loss = 1/2*(t - E)^2
     // 误差函数导数:loss' = E - t
     CUDAMatrix z = m_vActivations.back();
-    CUDAMatrix t = CreateCUDAMatrix(z.height, z.width);
+    CUDAMatrix t = m_nSG;
 
     void* params[] =
     {
@@ -269,13 +293,13 @@ void util::NeuralEx::BackProp()
         0, m_nStream, &params[0], 0));
     checkCudaErrors(cuStreamSynchronize(m_nStream));
 
-    CUDAMatrix delta = CreateCUDAMatrix(z.height, z.width);
+    CUDAMatrix d = m_vDelta.back();
     void* deltaparams[] =
     {
         (void*)&z.data, (void*)&z.pitchwidth,
         (void*)&m_mTarget.data, (void*)&m_mTarget.pitchwidth,
         (void*)&t.data, (void*)&t.pitchwidth,
-        (void*)&delta.data, (void*)&delta.pitchwidth,
+        (void*)&d.data, (void*)&d.pitchwidth,
     };
 
     checkCudaErrors(cuLaunchKernel(m_fDeltaTarget,
@@ -287,25 +311,18 @@ void util::NeuralEx::BackProp()
     CUDAMatrix b = m_vNabla_b.back();
     void* rowwiseparams[] = 
     {
-        (void*)&delta.data, (void*)&delta.pitchwidth,
+        (void*)&d.data, (void*)&d.pitchwidth,
         (void*)&b.data, (void*)&b.pitchwidth
     };
 
     checkCudaErrors(cuLaunchKernel(m_fReduction,
-        delta.height, 1, 1, delta.width, 1, 1,
-        delta.stride, m_nStream, &rowwiseparams[0], 0));
+        d.height, 1, 1, d.width, 1, 1,
+        d.stride, m_nStream, &rowwiseparams[0], 0));
     checkCudaErrors(cuStreamSynchronize(m_nStream));
 
     // 求权值更新
     CUDAMatrix lz = *(m_vActivations.rbegin() + 1);
     CUDAMatrix lw = m_vNabla_w.back();
-
-    HOSTMatrix ha(lz.height, lz.width);
-    CopyCUDAToHost(lz, ha, m_nStream);
-    HOSTMatrix hb(delta.height, delta.width);
-    CopyCUDAToHost(delta, hb, m_nStream);
-    HOSTMatrix mc1 = hb * ha.transpose();
-    
 
     dim3 block(BLOCK_SIZE, BLOCK_SIZE);
     int gx = (lw.width + block.x - 1) / block.x;
@@ -313,7 +330,7 @@ void util::NeuralEx::BackProp()
 
     void* mulparams[] =
     {
-        (void*)&delta.data, (void*)&delta.pitchwidth,
+        (void*)&d.data, (void*)&d.pitchwidth,
         (void*)&lz.data, (void*)&lz.pitchwidth,
         (void*)&lw.data, (void*)&lw.pitchwidth
     };
@@ -323,20 +340,31 @@ void util::NeuralEx::BackProp()
         0, m_nStream, &mulparams[0], 0));
     checkCudaErrors(cuStreamSynchronize(m_nStream));
 
-    //HOSTMatrix mc2(b.height, b.width);
-    //CopyCUDAToHost(b, mc2, m_nStream);
+    //HOSTMatrix ha(lz.height, lz.width);
+    //CopyCUDAToHost(lz, ha, m_nStream);
+    //HOSTMatrix hb(d.height, d.width);
+    //CopyCUDAToHost(d, hb, m_nStream);
+    //HOSTMatrix mc1 = hb * ha.transpose();
 
-        //float eps = 1.e-4;
-        //const auto& c1 = mc1.array();
-        //const auto& c2 = mc2.array();
-        //for (int i = 0; i < mc1.size(); i++) {
-        //    if (fabs(c1(i) - c2(i)) > eps) {
-        //        cout << i << endl;
-        //        cout << c1(i) << endl;
-        //        cout << c2(i) << endl;
-        //        break;
-        //    }
-        //}
+    //HOSTMatrix mc2(lw.height, lw.width);
+    //CopyCUDAToHost(lw, mc2, m_nStream);
+
+    //    float eps = 1.e-4;
+    //    const auto& c1 = mc1.array();
+    //    const auto& c2 = mc2.array();
+    //    for (int i = 0; i < mc1.size(); i++) {
+    //        if (fabs(c1(i) - c2(i)) > eps) {
+    //            cout << i << endl;
+    //            cout << c1(i) << endl;
+    //            cout << c2(i) << endl;
+    //            break;
+    //        }
+    //    }
+}
+
+void util::NeuralEx::BackPropLine()
+{
+
 }
 
 void util::NeuralEx::Update()
@@ -369,6 +397,13 @@ void util::NeuralEx::Release()
         DestroyCUDAMatrix(item);
     }
     m_vActivations.clear();
+
+    for (auto& item : m_vDelta) {
+        DestroyCUDAMatrix(item);
+    }
+    m_vDelta.clear();
+    
+    DestroyCUDAMatrix(m_nSG);
 
     for (auto& item : m_vInputSum) {
         DestroyCUDAMatrix(item);

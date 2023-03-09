@@ -44,8 +44,11 @@ namespace util
 		// 前向计算
 		void FeedForward();
 
-		// 反向传播
-		void BackProp();
+		// 反向传播(目标)
+		void BackPropLast();
+
+		// 反向传播链
+		void BackPropLine();
 
 		// 更新权值
 		void Update();
@@ -101,5 +104,11 @@ namespace util
 		CUfunction m_fActivatePrime = nullptr;
 		CUfunction m_fDeltaTarget = nullptr;
 		CUfunction m_fMulTransB = nullptr;
+
+		// 目标偏差临时变量
+		CUDAMatrix m_nSG;
+
+		// 偏导临时变量
+		std::vector<CUDAMatrix> m_vDelta;
 	};
 }
