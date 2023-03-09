@@ -11,6 +11,7 @@
 #include "Analyze.h"
 #include "neural.h"
 #include "neuralex.h"
+#include "type.h"
 #include "../Eigen/Core"
 
 using namespace std;
@@ -19,17 +20,14 @@ using namespace Eigen;
 using namespace util;
 
 // 从本地训练记录开始
-#define START_FROM_RECORD
+//#define START_FROM_RECORD
+
+// cuda加速
+#define CUDA_NEURAL
 
 int main()
 {
     srand((unsigned int)time(0));
-
-    NeuralEx networkex;
-    networkex.InitBuild({ 700, 100, 10 });
-    networkex.SGD();
-
-    return 0;
 
     // 网络参数本地记录
     std::wstring record = GetCurrentDir() + L"neural";
@@ -49,7 +47,11 @@ int main()
     int insz, outsz;
     train.GetInOut(insz, outsz);
 
+#ifdef CUDA_NEURAL
+    NeuralEx network;
+#else 
     Neural network;
+#endif
 
 #ifdef START_FROM_RECORD
     network.Load(record);
@@ -63,12 +65,20 @@ int main()
     int epochs = 1;
 
     // 批处理大小
-    int batch = 64;
+    int batch = 128;
 
+#ifdef CUDA_NEURAL
+    HOSTMatrix mi(insz, batch);
+    HOSTMatrix mt(outsz, batch);
+
+    HOSTMatrix so;
+#else 
     MatrixXf mi(insz, batch);
     MatrixXf mt(outsz, batch);
-    
+
     MatrixXf so;
+#endif
+
     float loss = 0;
 
     for (int i = 0; i < epochs; i++) {
@@ -129,7 +139,7 @@ int main()
         }
     }
 
-    std::cout << (float)cnt / batch << endl;
+    std::cout << (float)cnt / batch * 100 << "%" << endl;
 
     return 0;
 }

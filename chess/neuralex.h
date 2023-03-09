@@ -23,9 +23,9 @@ namespace util
 
 		// 样本比对
 		bool CompareSample(
-			Eigen::MatrixXf& in,
-			Eigen::MatrixXf& target,
-			Eigen::MatrixXf& out,
+			HOSTMatrix& in,
+			HOSTMatrix& target,
+			HOSTMatrix& out,
 			float& loss
 		);
 
@@ -104,6 +104,9 @@ namespace util
 		CUfunction m_fActivatePrime = nullptr;
 		CUfunction m_fDeltaTarget = nullptr;
 		CUfunction m_fMulTransB = nullptr;
+		CUfunction m_fMulTransA = nullptr;
+		CUfunction m_fArrayMul = nullptr;
+		CUfunction m_fUpdate = nullptr;
 
 		// 目标偏差临时变量
 		CUDAMatrix m_nSG;

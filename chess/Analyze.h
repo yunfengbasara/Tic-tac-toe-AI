@@ -32,6 +32,18 @@ namespace util
 			int batch
 		);
 
+		int ReadSample(
+			HOSTMatrix& matin,
+			HOSTMatrix& matout,
+			int batch
+		);
+
+		int ReadRandom(
+			HOSTMatrix& matin,
+			HOSTMatrix& matout,
+			int batch
+		);
+
 	private:
 		bool InitHandle(const std::wstring& path,
 			HANDLE& hFile, HANDLE& hMap, LPBYTE& lpMem);

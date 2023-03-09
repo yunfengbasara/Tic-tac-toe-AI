@@ -123,6 +123,51 @@ extern "C" __global__ void mulTransB(
 }
 
 /*
+* 转置a矩阵乘法
+*/
+extern "C" __global__ void mulTransA(
+    float* a, int apw, int ah,
+    float* b, int bpw,
+    float* c, int cpw)
+{
+    int bx = blockIdx.x;
+    int by = blockIdx.y;
+
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
+
+    int aBegin = by * BLOCK_SIZE;
+    int aStep = apw * BLOCK_SIZE;
+    int aEnd = aBegin + (ah - 1) * apw;
+
+    int bBegin = bx * BLOCK_SIZE;
+    int bStep = bpw * BLOCK_SIZE;
+
+    float sumC = 0;
+
+    for (int ia = aBegin, ib = bBegin;
+        ia <= aEnd; ia += aStep, ib += bStep) {
+        __shared__ float AS[BLOCK_SIZE][BLOCK_SIZE];
+        __shared__ float BS[BLOCK_SIZE][BLOCK_SIZE];
+
+        AS[ty][tx] = a[ia + ty * apw + tx];
+        BS[ty][tx] = b[ib + ty * bpw + tx];
+
+        __syncthreads();
+
+        for (int k = 0; k < BLOCK_SIZE; k++) {
+            sumC += AS[k][ty] * BS[k][tx];
+        }
+
+        __syncthreads();
+    }
+
+    int cBlock = cpw * BLOCK_SIZE * by + bx * BLOCK_SIZE;
+    int cThread = cpw * ty + tx;
+    c[cBlock + cThread] = sumC;
+}
+
+/*
 * 矩阵A的每一列和B相加
 * B是只有一列的矩阵
 * C[x][n] = A[x][n] + B[x][0]
@@ -193,4 +238,36 @@ extern "C" __global__ void deltaTarget(
     tmp *= c[cpw * bx + tx];
 
     d[dpw * bx + tx] = tmp;
+}
+
+/*
+* 逐个乘
+*/
+extern "C" __global__ void arrayMul(
+    float* a, int apw,
+    float* b, int bpw,
+    float* c, int cpw)
+{
+    int bx = blockIdx.x;
+    int tx = threadIdx.x;
+
+    c[cpw * bx + tx] = a[apw * bx + tx] * b[bpw * bx + tx];
+}
+
+/*
+* 更新函数
+*/
+extern "C" __global__ void update(
+    float* a, int apw,
+    float* b, int bpw,
+    float eta, int batch)
+{
+    int bx = blockIdx.x;
+    int tx = threadIdx.x;
+
+    float tmp = a[apw * bx + tx];
+    tmp /= batch;
+    tmp *= eta;
+
+    b[bpw * bx + tx] -= tmp;
 }
