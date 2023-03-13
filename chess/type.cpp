@@ -15,108 +15,55 @@ CUDAMatrix util::CreateCUDAMatrix(const HOSTMatrix& hostm)
         hostm.cols());
 
     CopyHostToCUDA(hostm, cudam);
+
     return cudam;
 }
 
-CUDAMatrix util::CreateCUDAMatrix(int h, int w)
+CUDAMatrix util::CreateCUDAMatrix(size_t rows, size_t cols)
 {
     CUDAMatrix cudam;
 
-    cudam.height = h;
-    cudam.width = w;
-    cudam.stride = cudam.width * EZ;
-    cudam.size = cudam.stride * cudam.height;
+    cudam.rows = rows;
+    cudam.cols = cols;
+    cudam.size = rows * cols * EZ;
 
-    cuMemAllocPitch(
-        &cudam.data, &cudam.pitch,
-        cudam.stride, cudam.height, EZ);
-
-    cudam.pitchwidth = cudam.pitch / EZ;
+    checkCudaErrors(cuMemAlloc(&cudam.data, cudam.size));
 
     return cudam;
 }
 
-CUresult util::DestroyCUDAMatrix(
+HOSTMatrix util::CreateHOSTMatrix(const CUDAMatrix& cudam)
+{
+    HOSTMatrix hostm = HOSTMatrix(cudam.rows, cudam.cols);
+
+    CopyCUDAToHost(cudam, hostm);
+
+    return hostm;
+}
+
+void util::DestroyCUDAMatrix(
     CUDAMatrix& cudam)
 {
-    CUresult ret;
+    cudam.height = 0;
+    cudam.width = 0;
+    cudam.size = 0;
 
-    ret = cuMemFree(cudam.data);
-    cudam = CUDAMatrix();
-
-    return ret;
+    checkCudaErrors(cuMemFree(cudam.data));
+    cudam.data = 0;
 }
 
-CUresult util::CopyHostToCUDA(
+void util::CopyHostToCUDA(
     const HOSTMatrix& hostm,
-    CUDAMatrix& cudam, 
-    CUstream stream)
+    CUDAMatrix& cudam)
 {
-    CUresult ret;
-
-    CUDA_MEMCPY2D work;
-    work.srcXInBytes = 0;
-    work.srcY = 0;
-    work.srcMemoryType = CU_MEMORYTYPE_HOST;
-    work.srcHost = hostm.data();
-    work.srcDevice = 0;
-    work.srcArray = 0;
-    work.srcPitch = hostm.cols() * EZ;
-
-    work.dstXInBytes = 0;
-    work.dstY = 0;
-    work.dstMemoryType = CU_MEMORYTYPE_DEVICE;
-    work.dstHost = 0;
-    work.dstDevice = cudam.data;
-    work.dstArray = 0;
-    work.dstPitch = cudam.pitch;
-
-    work.WidthInBytes = cudam.stride;
-    work.Height = cudam.height;
-
-    if (stream == nullptr) {
-        ret = cuMemcpy2D(&work);
-    }
-    else {
-        ret = cuMemcpy2DAsync(&work, stream);
-    }
-
-    return ret;
+    checkCudaErrors(
+        cuMemcpyHtoD(cudam.data, hostm.data(), cudam.size));
 }
 
-CUresult util::CopyCUDAToHost(
+void util::CopyCUDAToHost(
     const CUDAMatrix& cudam, 
-    HOSTMatrix& hostm, 
-    CUstream stream)
+    HOSTMatrix& hostm)
 {
-    CUresult ret;
-
-    CUDA_MEMCPY2D work;
-    work.srcXInBytes = 0;
-    work.srcY = 0;
-    work.srcMemoryType = CU_MEMORYTYPE_DEVICE;
-    work.srcHost = 0;
-    work.srcDevice = cudam.data;
-    work.srcArray = 0;
-    work.srcPitch = cudam.pitch;
-
-    work.dstXInBytes = 0;
-    work.dstY = 0;
-    work.dstMemoryType = CU_MEMORYTYPE_HOST;
-    work.dstHost = hostm.data();
-    work.dstDevice = 0;
-    work.dstArray = 0;
-    work.dstPitch = hostm.cols() * EZ;
-
-    work.WidthInBytes = cudam.stride;
-    work.Height = cudam.height;
-
-    if (stream == nullptr) {
-        ret = cuMemcpy2D(&work);
-    }
-    else {
-        ret = cuMemcpy2DAsync(&work, stream);
-    }
-
-    return ret;
+    checkCudaErrors(
+        cuMemcpyDtoH(hostm.data(), cudam.data, cudam.size));
 }

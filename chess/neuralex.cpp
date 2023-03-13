@@ -10,23 +10,6 @@ using namespace util;
 using namespace std;
 using namespace std::chrono;
 
-#ifndef checkCudaErrors
-#define checkCudaErrors(err) __checkCudaErrors(err, __FILE__, __LINE__)
-
-inline void __checkCudaErrors(CUresult err, const char* file, const int line) {
-    if (CUDA_SUCCESS != err) {
-        const char* errorStr = NULL;
-        cuGetErrorString(err, &errorStr);
-        fprintf(stderr,
-            "checkCudaErrors() Driver API error = %04d \"%s\" from file <%s>, "
-            "line %i.\n",
-            err, errorStr, file, line);
-        exit(EXIT_FAILURE);
-    }
-}
-
-#endif
-
 util::NeuralEx::NeuralEx()
 {
     std::vector<char> cubin;
@@ -39,12 +22,6 @@ util::NeuralEx::NeuralEx()
     }
 
     checkCudaErrors(cuModuleGetFunction(
-        &m_fMatrixMul, m_nModule, "matrixMul"));
-
-    checkCudaErrors(cuModuleGetFunction(
-        &m_fReduction, m_nModule, "reduction"));
-
-    checkCudaErrors(cuModuleGetFunction(
         &m_fColwiseAdd, m_nModule, "colwiseAdd"));
 
     checkCudaErrors(cuModuleGetFunction(
@@ -55,12 +32,6 @@ util::NeuralEx::NeuralEx()
 
     checkCudaErrors(cuModuleGetFunction(
         &m_fDeltaTarget, m_nModule, "deltaTarget"));
-
-    checkCudaErrors(cuModuleGetFunction(
-        &m_fMulTransB, m_nModule, "mulTransB"));
-    
-    checkCudaErrors(cuModuleGetFunction(
-        &m_fMulTransA, m_nModule, "mulTransA"));
 
     checkCudaErrors(cuModuleGetFunction(
         &m_fArrayMul, m_nModule, "arrayMul"));
@@ -83,7 +54,7 @@ bool util::NeuralEx::InitBuild(std::vector<int> p)
 
     Release();
 
-    cuStreamCreate(&m_nStream, cudaStreamNonBlocking);
+    checkCuBlasErrors(cublasCreate(&m_hBlasHandle));
 
     m_vNetParam = p;
 
@@ -126,8 +97,12 @@ bool util::NeuralEx::InitBuild(std::vector<int> p)
         m_vDelta.push_back(cm);
     }
 
+    HOSTMatrix deltaSum = HOSTMatrix(m_nBatch, 1);
+    deltaSum.setConstant(1);
+    m_nDeltaSum = CreateCUDAMatrix(deltaSum);
+
     CUDAMatrix z = m_vActivations.back();
-    m_nSG = CreateCUDAMatrix(z.height, z.width);
+    m_nSG = CreateCUDAMatrix(z.rows, z.cols);
 
     for (size_t i = 1; i < p.size(); i++) {
         CUDAMatrix cm = CreateCUDAMatrix(p[i], m_nBatch);
@@ -139,7 +114,9 @@ bool util::NeuralEx::InitBuild(std::vector<int> p)
     return true;
 }
 
-bool util::NeuralEx::SetSample(HOSTMatrix& in, HOSTMatrix& target)
+bool util::NeuralEx::SetSample(
+    HOSTMatrix& in,
+    HOSTMatrix& target)
 {
     if (in.cols() != target.cols()) {
         return false;
@@ -148,12 +125,12 @@ bool util::NeuralEx::SetSample(HOSTMatrix& in, HOSTMatrix& target)
     int batch = in.cols();
 
     // 检查输入维度
-    if (m_vActivations[0].height != in.rows()) {
+    if (m_vActivations[0].rows != in.rows()) {
         return false;
     }
 
     // 检查输出维度
-    if (m_mTarget.height != target.rows()) {
+    if (m_mTarget.rows != target.rows()) {
         return false;
     }
 
@@ -178,6 +155,7 @@ bool util::NeuralEx::SetSample(HOSTMatrix& in, HOSTMatrix& target)
     }
     m_vDelta.clear();
 
+    DestroyCUDAMatrix(m_nDeltaSum);
     DestroyCUDAMatrix(m_nSG);
 
     for (size_t i = 0; i < m_vNetParam.size(); i++) {
@@ -189,6 +167,10 @@ bool util::NeuralEx::SetSample(HOSTMatrix& in, HOSTMatrix& target)
         CUDAMatrix cm = CreateCUDAMatrix(m_vNetParam[i], m_nBatch);
         m_vDelta.push_back(cm);
     }
+
+    HOSTMatrix deltaSum = HOSTMatrix(m_nBatch, 1);
+    deltaSum.setConstant(1);
+    m_nDeltaSum = CreateCUDAMatrix(deltaSum);
 
     CUDAMatrix z = m_vActivations.back();
     m_nSG = CreateCUDAMatrix(z.height, z.width);
@@ -205,14 +187,16 @@ bool util::NeuralEx::SetSample(HOSTMatrix& in, HOSTMatrix& target)
     }
 
     CopyHostToCUDA(in, m_vActivations[0]);
-    CopyHostToCUDA(target, m_mTarget);
+
+    DestroyCUDAMatrix(m_mTarget);
+    m_mTarget = CreateCUDAMatrix(target);
     return true;
 }
 
 bool util::NeuralEx::CompareSample(
-    HOSTMatrix& in, 
-    HOSTMatrix& target, 
-    HOSTMatrix& out, 
+    HOSTMatrix& in,
+    HOSTMatrix& target,
+    HOSTMatrix& out,
     float& loss)
 {
     if (!SetSample(in, target)) {
@@ -221,10 +205,7 @@ bool util::NeuralEx::CompareSample(
 
     FeedForward();
 
-    CUDAMatrix cm = m_vActivations.back();
-
-    out.resize(cm.height, cm.width);
-    CopyCUDAToHost(cm, out);
+    out = CreateHOSTMatrix(m_vActivations.back());
 
     // 损失函数:loss = 1/2*(t - E)^2
     HOSTMatrix E = 1.0f / 2.0f * (target.array() - out.array()).pow(2);
@@ -251,6 +232,168 @@ void util::NeuralEx::SGD()
     Update();
 }
 
+bool util::NeuralEx::Save(const std::wstring& path)
+{
+    // 计算保存文件大小
+    DWORD filesize = 0;
+
+    // 层数解构:层数+每层节点个数
+    filesize += m_vNetParam.size();
+    filesize += m_vNetParam.size() * sizeof(DWORD);
+    // 学习速度
+    filesize += sizeof(m_fEta);
+    // Biases大小
+    for (auto& b : m_vBiases) {
+        filesize += b.size;
+    }
+    // Weights大小
+    for (auto& w : m_vWeights) {
+        filesize += w.size;
+    }
+
+    HANDLE hFile = INVALID_HANDLE_VALUE;
+    HANDLE hMap = NULL;
+    LPBYTE lpMem = NULL;
+
+    defer(
+        if (lpMem != NULL) {
+            ::UnmapViewOfFile(lpMem);
+        }
+        if (hMap != NULL) {
+            ::CloseHandle(hMap);
+        }
+        if (hFile != INVALID_HANDLE_VALUE) {
+            ::CloseHandle(hFile);
+        }
+    );
+
+    hFile = ::CreateFile(path.c_str(),
+        GENERIC_READ | GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        NULL,
+        CREATE_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hFile == INVALID_HANDLE_VALUE) {
+        return false;
+    }
+
+    hMap = ::CreateFileMapping(hFile, NULL, PAGE_READWRITE, 0, filesize, NULL);
+    if (hMap == NULL) {
+        return false;
+    }
+
+    lpMem = (LPBYTE)::MapViewOfFile(hMap, FILE_MAP_ALL_ACCESS, 0, 0, 0);
+    if (lpMem == NULL) {
+        return false;
+    }
+
+    // 文件操作位置
+    DWORD startfile = 0;
+
+    DWORD layered = m_vNetParam.size();
+    *(DWORD*)(lpMem + startfile) = layered;
+    startfile += sizeof(layered);
+
+    for (auto& n : m_vNetParam) {
+        *(DWORD*)(lpMem + startfile) = n;
+        startfile += sizeof(DWORD);
+    }
+
+    *(float*)(lpMem + startfile) = m_fEta;
+    startfile += sizeof(m_fEta);
+
+    for (auto& b : m_vBiases) {
+        HOSTMatrix tb = CreateHOSTMatrix(b);
+        memcpy(lpMem + startfile, tb.data(), b.size);
+        startfile += b.size;
+    }
+
+    for (auto& w : m_vWeights) {
+        HOSTMatrix tw = CreateHOSTMatrix(w);
+        memcpy(lpMem + startfile, tw.data(), w.size);
+        startfile += w.size;
+    }
+
+    return true;
+}
+
+bool util::NeuralEx::Load(const std::wstring& path)
+{
+    HANDLE hFile = INVALID_HANDLE_VALUE;
+    HANDLE hMap = NULL;
+    LPBYTE lpMem = NULL;
+
+    defer(
+        if (lpMem != NULL) {
+            ::UnmapViewOfFile(lpMem);
+        }
+        if (hMap != NULL) {
+            ::CloseHandle(hMap);
+        }
+        if (hFile != INVALID_HANDLE_VALUE) {
+            ::CloseHandle(hFile);
+        }
+    );
+
+    hFile = ::CreateFile(path.c_str(),
+        GENERIC_READ | GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        NULL,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hFile == INVALID_HANDLE_VALUE) {
+        return false;
+    }
+
+    hMap = ::CreateFileMapping(hFile, NULL, PAGE_READWRITE, 0, 0, NULL);
+    if (hMap == NULL) {
+        return false;
+    }
+
+    lpMem = (LPBYTE)::MapViewOfFile(hMap, FILE_MAP_ALL_ACCESS, 0, 0, 0);
+    if (lpMem == NULL) {
+        return false;
+    }
+
+    // 文件读取位置
+    DWORD startfile = 0;
+
+    // 网络层数
+    DWORD layered = *(DWORD*)(lpMem + startfile);
+    startfile += sizeof(layered);
+
+    m_vNetParam.resize(layered);
+    for (auto& n : m_vNetParam) {
+        n = *(DWORD*)(lpMem + startfile);
+        startfile += sizeof(DWORD);
+    }
+
+    m_fEta = *(float*)(lpMem + startfile);
+    startfile += sizeof(m_fEta);
+
+    if (!InitBuild(m_vNetParam)) {
+        return false;
+    }
+
+    for (auto& b : m_vBiases) {
+        float* pf = (float*)(lpMem + startfile);
+        HOSTMatrix tb(b.rows, b.cols);
+        tb = Map<HOSTMatrix>(pf, b.rows, b.cols);
+        CopyHostToCUDA(tb, b);
+        startfile += b.size;
+    }
+
+    for (auto& w : m_vWeights) {
+        float* pf = (float*)(lpMem + startfile);
+        HOSTMatrix tw(w.rows, w.cols);
+        tw = Map<HOSTMatrix>(pf, w.rows, w.cols);
+        CopyHostToCUDA(tw, w);
+        startfile += w.size;
+    }
+
+    return true;
+}
+
 void util::NeuralEx::FeedForward()
 {
     // m_vActivations第一层为输入层
@@ -261,47 +404,39 @@ void util::NeuralEx::FeedForward()
         int width = m_vInputSum[i].width;
         int height = m_vInputSum[i].height;
 
-        dim3 block(BLOCK_SIZE, BLOCK_SIZE);
-        int gx = (width + block.x - 1) / block.x;
-        int gy = (height + block.y - 1) / block.y;
-
         // 输出和权重乘积
-        void* mulparams[] = 
-        {
-            (void*)&m_vWeights[i].data, (void*)&m_vWeights[i].pitchwidth,
-            (void*)&m_vActivations[i].data, (void*)&m_vActivations[i].pitchwidth,
-            (void*)&m_vInputSum[i].data, (void*)&m_vInputSum[i].pitchwidth
-        };
-
-        checkCudaErrors(cuLaunchKernel(m_fMatrixMul,
-            gx, gy, 1, block.x, block.y, 1,
-            0, m_nStream, &mulparams[0], 0));
-        checkCudaErrors(cuStreamSynchronize(m_nStream));
+        const float alpha = 1.0f, beta = 0.0f;
+        checkCuBlasErrors(cublasSgemm(m_hBlasHandle, 
+            CUBLAS_OP_N, CUBLAS_OP_N,
+            m_vInputSum[i].rows, m_vInputSum[i].cols, m_vWeights[i].cols, 
+            &alpha,
+            (const float*)m_vWeights[i].data, m_vWeights[i].rows,
+            (const float*)m_vActivations[i].data, m_vActivations[i].rows,
+            &beta, 
+            (float*)m_vInputSum[i].data, m_vInputSum[i].rows));
 
         // 计算偏移
         void* addparams[] = 
         {
-            (void*)&m_vInputSum[i].data, (void*)&m_vInputSum[i].pitchwidth,
-            (void*)&m_vBiases[i].data, (void*)&m_vBiases[i].pitchwidth,
-            (void*)&m_vInputSum[i].data, (void*)&m_vInputSum[i].pitchwidth
+            (void*)&m_vInputSum[i].data, (void*)&m_vInputSum[i].width,
+            (void*)&m_vBiases[i].data, (void*)&m_vBiases[i].width,
+            (void*)&m_vInputSum[i].data, (void*)&m_vInputSum[i].width
         };
 
         checkCudaErrors(cuLaunchKernel(m_fColwiseAdd,
             height, 1, 1, width, 1, 1,
-            0, m_nStream, &addparams[0], 0));
-        checkCudaErrors(cuStreamSynchronize(m_nStream));
+            0, nullptr, &addparams[0], 0));
 
         // 激活
         void* actparams[] =
         {
-            (void*)&m_vInputSum[i].data, (void*)&m_vInputSum[i].pitchwidth,
-            (void*)&m_vActivations[i + 1].data, (void*)&m_vActivations[i + 1].pitchwidth
+            (void*)&m_vInputSum[i].data, (void*)&m_vInputSum[i].width,
+            (void*)&m_vActivations[i + 1].data, (void*)&m_vActivations[i + 1].width
         };
 
         checkCudaErrors(cuLaunchKernel(m_fActivation,
             height, 1, 1, width, 1, 1,
-            0, m_nStream, &actparams[0], 0));
-        checkCudaErrors(cuStreamSynchronize(m_nStream));
+            0, nullptr, &actparams[0], 0));
     }
 }
 
@@ -315,161 +450,118 @@ void util::NeuralEx::BackPropLast()
 
     void* params[] =
     {
-        (void*)&z.data, (void*)&z.pitchwidth,
-        (void*)&t.data, (void*)&t.pitchwidth
+        (void*)&z.data, (void*)&z.width,
+        (void*)&t.data, (void*)&t.width
     };
 
     checkCudaErrors(cuLaunchKernel(m_fActivatePrime,
         z.height, 1, 1, z.width, 1, 1,
-        0, m_nStream, &params[0], 0));
-    checkCudaErrors(cuStreamSynchronize(m_nStream));
+        0, nullptr, &params[0], 0));
 
     CUDAMatrix d = m_vDelta.back();
     void* deltaparams[] =
     {
-        (void*)&z.data, (void*)&z.pitchwidth,
-        (void*)&m_mTarget.data, (void*)&m_mTarget.pitchwidth,
-        (void*)&t.data, (void*)&t.pitchwidth,
-        (void*)&d.data, (void*)&d.pitchwidth,
+        (void*)&z.data, (void*)&z.width,
+        (void*)&m_mTarget.data, (void*)&m_mTarget.width,
+        (void*)&t.data, (void*)&t.width,
+        (void*)&d.data, (void*)&d.width,
     };
 
     checkCudaErrors(cuLaunchKernel(m_fDeltaTarget,
         z.height, 1, 1, z.width, 1, 1,
-        0, m_nStream, &deltaparams[0], 0));
-    checkCudaErrors(cuStreamSynchronize(m_nStream));
+        0, nullptr, &deltaparams[0], 0));
 
     // 偏移按行求和
     CUDAMatrix b = m_vNabla_b.back();
-    void* rowwiseparams[] = 
-    {
-        (void*)&d.data, (void*)&d.pitchwidth,
-        (void*)&b.data, (void*)&b.pitchwidth
-    };
+    CUDAMatrix td = m_nDeltaSum;
 
-    checkCudaErrors(cuLaunchKernel(m_fReduction,
-        d.height, 1, 1, d.width, 1, 1,
-        d.stride, m_nStream, &rowwiseparams[0], 0));
-    checkCudaErrors(cuStreamSynchronize(m_nStream));
+    // 输出和权重乘积
+    const float alpha = 1.0f, beta = 0.0f;
+    checkCuBlasErrors(cublasSgemm(m_hBlasHandle,
+        CUBLAS_OP_N, CUBLAS_OP_N,
+        b.rows, b.cols, d.cols,
+        &alpha,
+        (const float*)d.data, d.rows,
+        (const float*)td.data, td.rows,
+        &beta,
+        (float*)b.data, b.rows));
 
     // 求权值更新
     CUDAMatrix lz = *(m_vActivations.rbegin() + 1);
     CUDAMatrix lw = m_vNabla_w.back();
-
-    dim3 block(BLOCK_SIZE, BLOCK_SIZE);
-    int gx = (lw.width + block.x - 1) / block.x;
-    int gy = (lw.height + block.y - 1) / block.y;
-
-    void* mulparams[] =
-    {
-        (void*)&d.data, (void*)&d.pitchwidth,
-        (void*)&lz.data, (void*)&lz.pitchwidth,
-        (void*)&lw.data, (void*)&lw.pitchwidth
-    };
-
-    checkCudaErrors(cuLaunchKernel(m_fMulTransB,
-        gx, gy, 1, block.x, block.y, 1,
-        0, m_nStream, &mulparams[0], 0));
-    checkCudaErrors(cuStreamSynchronize(m_nStream));
+    checkCuBlasErrors(cublasSgemm(m_hBlasHandle,
+        CUBLAS_OP_N, CUBLAS_OP_T,
+        lw.rows, lw.cols, d.cols,
+        &alpha,
+        (const float*)d.data, d.rows,
+        (const float*)lz.data, lz.rows,
+        &beta,
+        (float*)lw.data, lw.rows));
 }
 
 void util::NeuralEx::BackPropLine()
 {
+    const float alpha = 1.0f, beta = 0.0f;
+
     for (size_t i = 1; i < m_vNetParam.size() - 1; i++) {
         CUDAMatrix z = *(m_vActivations.rbegin() + i);
         void* params[] =
         {
-            (void*)&z.data, (void*)&z.pitchwidth,
-            (void*)&z.data, (void*)&z.pitchwidth
+            (void*)&z.data, (void*)&z.width,
+            (void*)&z.data, (void*)&z.width
         };
 
         checkCudaErrors(cuLaunchKernel(m_fActivatePrime,
             z.height, 1, 1, z.width, 1, 1,
-            0, m_nStream, &params[0], 0));
-        checkCudaErrors(cuStreamSynchronize(m_nStream));
+            0, nullptr, &params[0], 0));
 
         CUDAMatrix lw = *(m_vWeights.rbegin() + i - 1);
         CUDAMatrix ld = *(m_vDelta.rbegin() + i - 1);
         CUDAMatrix d = *(m_vDelta.rbegin() + i);
 
-        dim3 block(BLOCK_SIZE, BLOCK_SIZE);
-        int gx = (d.width + block.x - 1) / block.x;
-        int gy = (d.height + block.y - 1) / block.y;
-
-        void* mulaparams[] =
-        {
-            (void*)&lw.data, (void*)&lw.pitchwidth, (void*)&lw.height,
-            (void*)&ld.data, (void*)&ld.pitchwidth,
-            (void*)&d.data, (void*)&d.pitchwidth,
-        };
-
-        checkCudaErrors(cuLaunchKernel(m_fMulTransA,
-            gx, gy, 1, block.x, block.y, 1,
-            0, m_nStream, &mulaparams[0], 0));
-        checkCudaErrors(cuStreamSynchronize(m_nStream));
+        checkCuBlasErrors(cublasSgemm(m_hBlasHandle,
+            CUBLAS_OP_T, CUBLAS_OP_N,
+            d.rows, d.cols, lw.rows,
+            &alpha,
+            (const float*)lw.data, lw.rows,
+            (const float*)ld.data, ld.rows,
+            &beta,
+            (float*)d.data, d.rows));
 
         void* arrmularams[] =
         {
-            (void*)&d.data, (void*)&d.pitchwidth,
-            (void*)&z.data, (void*)&z.pitchwidth,
-            (void*)&d.data, (void*)&d.pitchwidth,
+            (void*)&d.data, (void*)&d.width,
+            (void*)&z.data, (void*)&z.width,
+            (void*)&d.data, (void*)&d.width,
         };
 
         checkCudaErrors(cuLaunchKernel(m_fArrayMul,
             d.height, 1, 1, d.width, 1, 1,
-            0, m_nStream, &arrmularams[0], 0));
-        checkCudaErrors(cuStreamSynchronize(m_nStream));
+            0, nullptr, &arrmularams[0], 0));
 
         CUDAMatrix b = *(m_vNabla_b.rbegin() + i);
-        void* rowwiseparams[] =
-        {
-            (void*)&d.data, (void*)&d.pitchwidth,
-            (void*)&b.data, (void*)&b.pitchwidth
-        };
+        CUDAMatrix td = m_nDeltaSum;
 
-        checkCudaErrors(cuLaunchKernel(m_fReduction,
-            d.height, 1, 1, d.width, 1, 1,
-            d.stride, m_nStream, &rowwiseparams[0], 0));
-        checkCudaErrors(cuStreamSynchronize(m_nStream));
+        checkCuBlasErrors(cublasSgemm(m_hBlasHandle,
+            CUBLAS_OP_N, CUBLAS_OP_N,
+            b.rows, b.cols, d.cols,
+            &alpha,
+            (const float*)d.data, d.rows,
+            (const float*)td.data, td.rows,
+            &beta,
+            (float*)b.data, b.rows));
 
         CUDAMatrix lz = *(m_vActivations.rbegin() + i + 1);
         CUDAMatrix w = *(m_vNabla_w.rbegin() + i);
 
-        gx = (w.width + block.x - 1) / block.x;
-        gy = (w.height + block.y - 1) / block.y;
-
-        void* mulbparams[] =
-        {
-            (void*)&d.data, (void*)&d.pitchwidth,
-            (void*)&lz.data, (void*)&lz.pitchwidth,
-            (void*)&w.data, (void*)&w.pitchwidth
-        };
-
-        checkCudaErrors(cuLaunchKernel(m_fMulTransB,
-            gx, gy, 1, block.x, block.y, 1,
-            0, m_nStream, &mulbparams[0], 0));
-        checkCudaErrors(cuStreamSynchronize(m_nStream));
-
-        //HOSTMatrix ha(z.height, z.width);
-        //CopyCUDAToHost(z, ha, m_nStream);
-
-        //HOSTMatrix hb(d.height, d.width);
-        //CopyCUDAToHost(d, hb, m_nStream);
-        //HOSTMatrix mc1 = hb.array() * ha.array();
-
-        //HOSTMatrix mc2(d.height, d.width);
-        //CopyCUDAToHost(d, mc2, m_nStream);
-
-        //float eps = 1.e-4;
-        //const auto& c1 = mc1.array();
-        //const auto& c2 = mc2.array();
-        //for (int i = 0; i < mc1.size(); i++) {
-        //    if (fabs(c1(i) - c2(i)) > eps) {
-        //        cout << i << endl;
-        //        cout << c1(i) << endl;
-        //        cout << c2(i) << endl;
-        //        break;
-        //    }
-        //}
+        checkCuBlasErrors(cublasSgemm(m_hBlasHandle,
+            CUBLAS_OP_N, CUBLAS_OP_T,
+            w.rows, w.cols, d.cols,
+            &alpha,
+            (const float*)d.data, d.rows,
+            (const float*)lz.data, lz.rows,
+            &beta,
+            (float*)w.data, w.rows));
     }
 }
 
@@ -482,15 +574,14 @@ void util::NeuralEx::Update()
 
         void* update[] =
         {
-            (void*)&nb.data, (void*)&nb.pitchwidth,
-            (void*)&b.data, (void*)&b.pitchwidth,
+            (void*)&nb.data, (void*)&nb.width,
+            (void*)&b.data, (void*)&b.width,
             (void*)&m_fEta, (void*)&m_nBatch,
         };
 
         checkCudaErrors(cuLaunchKernel(m_fUpdate,
             b.height, 1, 1, b.width, 1, 1,
-            0, m_nStream, &update[0], 0));
-        checkCudaErrors(cuStreamSynchronize(m_nStream));
+            0, nullptr, &update[0], 0));
     }
 
     // 更新weights
@@ -500,15 +591,14 @@ void util::NeuralEx::Update()
 
         void* update[] =
         {
-            (void*)&nw.data, (void*)&nw.pitchwidth,
-            (void*)&w.data, (void*)&w.pitchwidth,
+            (void*)&nw.data, (void*)&nw.width,
+            (void*)&w.data, (void*)&w.width,
             (void*)&m_fEta, (void*)&m_nBatch,
         };
 
         checkCudaErrors(cuLaunchKernel(m_fUpdate,
             w.height, 1, 1, w.width, 1, 1,
-            0, m_nStream, &update[0], 0));
-        checkCudaErrors(cuStreamSynchronize(m_nStream));
+            0, nullptr, &update[0], 0));
     }
 }
 
@@ -543,7 +633,8 @@ void util::NeuralEx::Release()
         DestroyCUDAMatrix(item);
     }
     m_vDelta.clear();
-    
+
+    DestroyCUDAMatrix(m_nDeltaSum);
     DestroyCUDAMatrix(m_nSG);
 
     for (auto& item : m_vInputSum) {
@@ -553,8 +644,8 @@ void util::NeuralEx::Release()
 
     DestroyCUDAMatrix(m_mTarget);
 
-    if (m_nStream != nullptr) {
-        cuStreamDestroy(m_nStream);
-        m_nStream = nullptr;
+    if (m_hBlasHandle != nullptr) {
+        checkCuBlasErrors(cublasDestroy(m_hBlasHandle));
+        m_hBlasHandle = nullptr;
     }
 }

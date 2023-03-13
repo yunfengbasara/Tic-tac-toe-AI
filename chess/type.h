@@ -5,34 +5,33 @@
 
 namespace util
 {
-	// blockthreads
-	#define BLOCK_SIZE 32
-
 	// element size
 	#define EZ	sizeof(float)
 
-	// 由于CUDA中的矩阵按照行优先排列,因此定义按行优先的CPU矩阵
-	typedef Eigen::Matrix<
-		float,
-		Eigen::Dynamic,
-		Eigen::Dynamic,
-		Eigen::RowMajor> HOSTMatrix;
+	// CPU矩阵 内存中列为主序 和 CUBLAS相同
+	typedef Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic> HOSTMatrix;
 
 	// 定义CUDA中用到的矩阵结构
 	struct CUDAMatrix {
-		size_t		height = 0;		// 矩阵行数
-		size_t		width = 0;		// 矩阵列数
-		size_t		stride = 0;		// 一行字节大小:width * EZ
-		size_t		size = 0;		// 矩阵全部字节大小:stride * height
-		size_t		pitch = 0;		// 经过cuda对齐后的一行字节大小
-		size_t		pitchwidth = 0;	// 经过cuda对齐后的一行元素个数:pitch / EZ
-		CUdeviceptr data = 0;		// 矩阵数据
+		union {
+			size_t		width = 0;		// 宽度
+			size_t		cols;			// 列
+		};
+
+		union {
+			size_t		height;			// 高度
+			size_t		rows;			// 行
+		};
+		
+		size_t			size;			// 全部字节大小
+		CUdeviceptr		data;			// 数据
 	};
 
 	CUDAMatrix CreateCUDAMatrix(const HOSTMatrix& hostm);
-	CUDAMatrix CreateCUDAMatrix(int h, int w);
-	CUresult DestroyCUDAMatrix(CUDAMatrix& cudam);
-	CUresult CopyHostToCUDA(const HOSTMatrix& hostm, CUDAMatrix& cudam, CUstream stream = nullptr);
-	CUresult CopyCUDAToHost(const CUDAMatrix& cudam, HOSTMatrix& hostm, CUstream stream = nullptr);
+	CUDAMatrix CreateCUDAMatrix(size_t rows, size_t cols);
+	HOSTMatrix CreateHOSTMatrix(const CUDAMatrix& cudam);
+	void DestroyCUDAMatrix(CUDAMatrix& cudam);
+	void CopyHostToCUDA(const HOSTMatrix& hostm, CUDAMatrix& cudam);
+	void CopyCUDAToHost(const CUDAMatrix& cudam, HOSTMatrix& hostm);
 
 }

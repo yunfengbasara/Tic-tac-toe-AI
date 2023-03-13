@@ -3,6 +3,7 @@
 #include <string>
 #include "type.h"
 #include "cuda.h"
+#include "cublas_v2.h"
 
 namespace util
 {
@@ -90,26 +91,25 @@ namespace util
 		// 权重临时记录
 		std::vector<CUDAMatrix> m_vNabla_w;
 
-		// cuda流事件
-		CUstream m_nStream = nullptr;
-
 		// cubin模块
 		CUmodule m_nModule = nullptr;
 
+		// cublas
+		cublasHandle_t m_hBlasHandle = nullptr;
+
 		// cuda函数
-		CUfunction m_fMatrixMul = nullptr;
-		CUfunction m_fReduction = nullptr;
 		CUfunction m_fColwiseAdd = nullptr;
 		CUfunction m_fActivation = nullptr;
 		CUfunction m_fActivatePrime = nullptr;
 		CUfunction m_fDeltaTarget = nullptr;
-		CUfunction m_fMulTransB = nullptr;
-		CUfunction m_fMulTransA = nullptr;
 		CUfunction m_fArrayMul = nullptr;
 		CUfunction m_fUpdate = nullptr;
 
 		// 目标偏差临时变量
 		CUDAMatrix m_nSG;
+
+		// 偏导临时变量求和
+		CUDAMatrix m_nDeltaSum;
 
 		// 偏导临时变量
 		std::vector<CUDAMatrix> m_vDelta;

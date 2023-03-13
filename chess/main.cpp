@@ -20,7 +20,7 @@ using namespace Eigen;
 using namespace util;
 
 // 从本地训练记录开始
-//#define START_FROM_RECORD
+#define START_FROM_RECORD
 
 // cuda加速
 #define CUDA_NEURAL
@@ -67,18 +67,10 @@ int main()
     // 批处理大小
     int batch = 128;
 
-#ifdef CUDA_NEURAL
-    HOSTMatrix mi(insz, batch);
-    HOSTMatrix mt(outsz, batch);
-
-    HOSTMatrix so;
-#else 
     MatrixXf mi(insz, batch);
     MatrixXf mt(outsz, batch);
 
     MatrixXf so;
-#endif
-
     float loss = 0;
 
     for (int i = 0; i < epochs; i++) {
@@ -116,8 +108,12 @@ int main()
         std::cout << "use " << sec.count() << " seconds" << endl;
     }
 
+#ifdef START_FROM_RECORD
+
+#else
     // 记录训练后的网络
-    //network.Save(record);
+    network.Save(record);
+#endif
 
     // 计算正确率
     int cnt = 0;

@@ -303,3 +303,29 @@ bool util::LoadCUBIN(const std::vector<char>& cubin, CUmodule& module)
 
 	return true;
 }
+
+void util::CheckCudaErrors(CUresult err, const char* file, const int line) {
+	if (CUDA_SUCCESS == err) {
+		return;
+	}
+
+	const char* errorStr = NULL;
+	cuGetErrorString(err, &errorStr);
+	fprintf(stderr,
+		"CheckCudaErrors() Driver API error = %04d \"%s\" from file <%s>, "
+		"line %i.\n",
+		err, errorStr, file, line);
+	exit(EXIT_FAILURE);
+}
+
+void util::CheckCuBlasErrors(cublasStatus_t err, const char* file, const int line) {
+	if (CUBLAS_STATUS_SUCCESS == err) {
+		return;
+	}
+
+	fprintf(stderr,
+		"CheckCuBlasErrors() Driver API error = %04d from file <%s>, "
+		"line %i.\n",
+		err, file, line);
+	exit(EXIT_FAILURE);
+}

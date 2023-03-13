@@ -4,6 +4,7 @@
 #include <vector>
 #include "cuda_runtime.h"
 #include "cuda.h"
+#include "cublas_v2.h"
 
 namespace util
 {
@@ -25,6 +26,15 @@ namespace util
 {
 	// 获取当前运行路径
 	std::wstring GetCurrentDir();
+
+	#define checkCudaErrors(err) CheckCudaErrors(err, __FILE__, __LINE__)
+	#define checkCuBlasErrors(err) CheckCuBlasErrors(err, __FILE__, __LINE__)
+
+	// CUDA错误
+	void CheckCudaErrors(CUresult err, const char* file, const int line);
+
+	// CUBLAS错误
+	void CheckCuBlasErrors(cublasStatus_t err, const char* file, const int line);
 
 	// 编译CU
 	bool CompileFileToCUBIN(const std::wstring& cufile, std::vector<char>& cubin);

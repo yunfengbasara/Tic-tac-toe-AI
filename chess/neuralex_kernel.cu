@@ -3,15 +3,15 @@
 * C[x][0] = C[x][0] + C[x][1] + ... + C[x][n]
 */
 extern "C" __global__ void reduction(
-    float* a, int apw, 
-    float* c, int cpw)
+    float* a, int aw, 
+    float* c, int cw)
 {
     int bx = blockIdx.x;
     int bdx = blockDim.x;
     int tx = threadIdx.x;
 
     extern __shared__ float st[];
-    st[tx] = a[apw * bx + tx];
+    st[tx] = a[aw * bx + tx];
     __syncthreads();
 
     for (int sep = 1; sep < bdx; sep *= 2) {
@@ -26,145 +26,9 @@ extern "C" __global__ void reduction(
     }
 
     if (tx == 0) {
-        int bIdx = cpw * bx;
+        int bIdx = cw * bx;
         c[bIdx + 0] = st[0];
     }
-}
-
-/*
-* 矩阵乘法
-*/
-#define BLOCK_SIZE 32
-extern "C" __global__ void matrixMul(
-    float* a, int apw, 
-    float* b, int bpw, 
-    float* c, int cpw)
-{
-    int bx = blockIdx.x;
-    int by = blockIdx.y;
-
-    int tx = threadIdx.x;
-    int ty = threadIdx.y;
-
-    int aBegin = apw * BLOCK_SIZE * by;
-    int aStep = BLOCK_SIZE;
-    int aEnd = aBegin + apw - 1;
-
-    int bBegin = bx * BLOCK_SIZE;
-    int bStep = bpw * BLOCK_SIZE;
-
-    float sumC = 0;
-
-    for (int ia = aBegin, ib = bBegin;
-        ia <= aEnd; ia += aStep, ib += bStep) {
-        __shared__ float AS[BLOCK_SIZE][BLOCK_SIZE];
-        __shared__ float BS[BLOCK_SIZE][BLOCK_SIZE];
-
-        AS[ty][tx] = a[ia + ty * apw + tx];
-        BS[ty][tx] = b[ib + ty * bpw + tx];
-
-        __syncthreads();
-
-        for (int k = 0; k < BLOCK_SIZE; k++) {
-            sumC += AS[ty][k] * BS[k][tx];
-        }
-
-        __syncthreads();
-    }
-
-    int cBlock = cpw * BLOCK_SIZE * by + bx * BLOCK_SIZE;
-    int cThread = cpw * ty + tx;
-    c[cBlock + cThread] = sumC;
-}
-
-/*
-* 转置b矩阵乘法
-*/
-extern "C" __global__ void mulTransB(
-    float* a, int apw,
-    float* b, int bpw,
-    float* c, int cpw)
-{
-    int bx = blockIdx.x;
-    int by = blockIdx.y;
-
-    int tx = threadIdx.x;
-    int ty = threadIdx.y;
-
-    int aBegin = apw * BLOCK_SIZE * by;
-    int aStep = BLOCK_SIZE;
-    int aEnd = aBegin + apw - 1;
-
-    int bBegin = bpw * BLOCK_SIZE * bx;
-    int bStep = BLOCK_SIZE;
-
-    float sumC = 0;
-
-    for (int ia = aBegin, ib = bBegin;
-        ia <= aEnd; ia += aStep, ib += bStep) {
-        __shared__ float AS[BLOCK_SIZE][BLOCK_SIZE];
-        __shared__ float BS[BLOCK_SIZE][BLOCK_SIZE];
-
-        AS[ty][tx] = a[ia + ty * apw + tx];
-        BS[ty][tx] = b[ib + ty * bpw + tx];
-
-        __syncthreads();
-
-        for (int k = 0; k < BLOCK_SIZE; k++) {
-            sumC += AS[ty][k] * BS[tx][k];
-        }
-
-        __syncthreads();
-    }
-
-    int cBlock = cpw * BLOCK_SIZE * by + bx * BLOCK_SIZE;
-    int cThread = cpw * ty + tx;
-    c[cBlock + cThread] = sumC;
-}
-
-/*
-* 转置a矩阵乘法
-*/
-extern "C" __global__ void mulTransA(
-    float* a, int apw, int ah,
-    float* b, int bpw,
-    float* c, int cpw)
-{
-    int bx = blockIdx.x;
-    int by = blockIdx.y;
-
-    int tx = threadIdx.x;
-    int ty = threadIdx.y;
-
-    int aBegin = by * BLOCK_SIZE;
-    int aStep = apw * BLOCK_SIZE;
-    int aEnd = aBegin + (ah - 1) * apw;
-
-    int bBegin = bx * BLOCK_SIZE;
-    int bStep = bpw * BLOCK_SIZE;
-
-    float sumC = 0;
-
-    for (int ia = aBegin, ib = bBegin;
-        ia <= aEnd; ia += aStep, ib += bStep) {
-        __shared__ float AS[BLOCK_SIZE][BLOCK_SIZE];
-        __shared__ float BS[BLOCK_SIZE][BLOCK_SIZE];
-
-        AS[ty][tx] = a[ia + ty * apw + tx];
-        BS[ty][tx] = b[ib + ty * bpw + tx];
-
-        __syncthreads();
-
-        for (int k = 0; k < BLOCK_SIZE; k++) {
-            sumC += AS[k][ty] * BS[k][tx];
-        }
-
-        __syncthreads();
-    }
-
-    int cBlock = cpw * BLOCK_SIZE * by + bx * BLOCK_SIZE;
-    int cThread = cpw * ty + tx;
-    c[cBlock + cThread] = sumC;
 }
 
 /*
@@ -173,101 +37,101 @@ extern "C" __global__ void mulTransA(
 * C[x][n] = A[x][n] + B[x][0]
 */
 extern "C" __global__ void colwiseAdd(
-    float* a, int apw,
-    float* b, int bpw,
-    float* c, int cpw)
+    float* a, int aw,
+    float* b, int bw,
+    float* c, int cw)
 {
     int bx = blockIdx.x;
     int tx = threadIdx.x;
 
     __shared__ float tmp;
     if (tx == 0) {
-        int bIdx = bpw * bx;
+        int bIdx = bw * bx;
         tmp = b[bIdx];
     }
     __syncthreads();
 
-    c[cpw * bx + tx] = a[apw * bx + tx] + tmp;
+    c[cw * bx + tx] = a[aw * bx + tx] + tmp;
 }
 
 /*
 * 激活函数
 */
 extern "C" __global__ void activation(
-    float* a, int apw,
-    float* b, int bpw)
+    float* a, int aw,
+    float* b, int bw)
 {
     int bx = blockIdx.x;
     int tx = threadIdx.x;
 
-    float tmp = a[apw * bx + tx];
+    float tmp = a[aw * bx + tx];
     tmp = 1.0f / (1.0f + expf(-tmp));
 
-    b[bpw * bx + tx] = tmp;
+    b[bw * bx + tx] = tmp;
 }
 
 /*
 * 激活函数导数
 */
 extern "C" __global__ void activatePrime(
-    float* a, int apw,
-    float* b, int bpw)
+    float* a, int aw,
+    float* b, int bw)
 {
     int bx = blockIdx.x;
     int tx = threadIdx.x;
 
-    float tmp = a[apw * bx + tx];
+    float tmp = a[aw * bx + tx];
     tmp = tmp * (1 - tmp);
 
-    b[bpw * bx + tx] = tmp;
+    b[bw * bx + tx] = tmp;
 }
 
 /*
 * 计算偏移导数
 */
 extern "C" __global__ void deltaTarget(
-    float* a, int apw,
-    float* b, int bpw,
-    float* c, int cpw,
-    float* d, int dpw)
+    float* a, int aw,
+    float* b, int bw,
+    float* c, int cw,
+    float* d, int dw)
 {
     int bx = blockIdx.x;
     int tx = threadIdx.x;
 
-    float tmp = a[apw * bx + tx] - b[bpw * bx + tx];
-    tmp *= c[cpw * bx + tx];
+    float tmp = a[aw * bx + tx] - b[bw * bx + tx];
+    tmp *= c[cw * bx + tx];
 
-    d[dpw * bx + tx] = tmp;
+    d[dw * bx + tx] = tmp;
 }
 
 /*
 * 逐个乘
 */
 extern "C" __global__ void arrayMul(
-    float* a, int apw,
-    float* b, int bpw,
-    float* c, int cpw)
+    float* a, int aw,
+    float* b, int bw,
+    float* c, int cw)
 {
     int bx = blockIdx.x;
     int tx = threadIdx.x;
 
-    c[cpw * bx + tx] = a[apw * bx + tx] * b[bpw * bx + tx];
+    c[cw * bx + tx] = a[aw * bx + tx] * b[bw * bx + tx];
 }
 
 /*
 * 更新函数
 */
 extern "C" __global__ void update(
-    float* a, int apw,
-    float* b, int bpw,
+    float* a, int aw,
+    float* b, int bw,
     float eta, int batch)
 {
     int bx = blockIdx.x;
     int tx = threadIdx.x;
 
-    float tmp = a[apw * bx + tx];
+    float tmp = a[aw * bx + tx];
     tmp /= batch;
     tmp *= eta;
 
-    b[bpw * bx + tx] -= tmp;
+    b[bw * bx + tx] -= tmp;
 }
