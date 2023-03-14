@@ -84,13 +84,13 @@ int main()
     network.InitBuild({ insz, 100, outsz });
 #endif
 
-    network.SetLearnRate(0.3);
+    network.SetLearnRate(0.1);
 
     // 迭代次数
-    int epochs = 30;
+    int epochs = 10;
 
     // 批处理大小
-    int batch = 64;
+    int batch = 32;
 
     // 训练前计算正确率
     MatrixXf tmi(insz, batch);
