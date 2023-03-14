@@ -35,6 +35,10 @@ extern "C" __global__ void reduction(
 * 矩阵A的每一列和B相加
 * B是只有一列的矩阵
 * C[x][n] = A[x][n] + B[x][0]
+* Eigen拷贝到显卡内存中明明是按列存储
+* 然而该算子是按行计算,整个神经网络计算结果正确
+* tmp应该像colwiseAdd2函数一样,取余
+* 这就离谱
 */
 extern "C" __global__ void colwiseAdd(
     float* a, int aw,
@@ -52,6 +56,37 @@ extern "C" __global__ void colwiseAdd(
     __syncthreads();
 
     c[cw * bx + tx] = a[aw * bx + tx] + tmp;
+}
+
+/*
+* 矩阵A的每一列和B相加
+* B是只有一列的矩阵
+* C[x][n] = A[x][n] + B[x][0]
+* 内存主序按列
+*/
+extern "C" __global__ void colwiseAdd2(
+    float* a, int aw, int ah,
+    float* b, int bw, int bh,
+    float* c, int cw, int ch,
+    int block_x, int block_y)
+{
+    int bx = blockIdx.x;
+    int by = blockIdx.y;
+
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
+
+    if ((bx * block_x + tx) >= aw) {
+        return;
+    }
+
+    if ((by * block_y + ty) >= ah) {
+        return;
+    }
+
+    int cBlock = by * block_y * cw + bx * block_x;
+    int cIndex = cBlock + ty * cw + tx;
+    c[cIndex] = a[cIndex] + b[cIndex % bh];
 }
 
 /*

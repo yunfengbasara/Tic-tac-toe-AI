@@ -25,6 +25,31 @@ using namespace util;
 // cuda加速
 #define CUDA_NEURAL
 
+void checktest(MatrixXf mt, MatrixXf so) {
+    int batch = mt.cols();
+
+    int cnt = 0;
+    for (int i = 0; i < batch; i++) {
+        const auto& col1 = mt.col(i);
+        const auto& col2 = so.col(i);
+        int idx1 = 0, idx2 = 0;
+        for (int j = 0; j < col1.rows(); j++) {
+            if (col1(j) > col1(idx1)) {
+                idx1 = j;
+            }
+
+            if (col2(j) > col2(idx2)) {
+                idx2 = j;
+            }
+        }
+        if (idx1 == idx2) {
+            cnt++;
+        }
+    }
+
+    std::cout << (float)cnt / batch * 100 << "%" << endl;
+}
+
 int main()
 {
     srand((unsigned int)time(0));
@@ -62,11 +87,23 @@ int main()
     network.SetLearnRate(0.3);
 
     // 迭代次数
-    int epochs = 1;
+    int epochs = 30;
 
     // 批处理大小
-    int batch = 128;
+    int batch = 64;
 
+    // 训练前计算正确率
+    MatrixXf tmi(insz, batch);
+    MatrixXf tmt(outsz, batch);
+    MatrixXf tso;
+    float tloss = 0;
+    test.ReadRandom(tmi, tmt, batch);
+
+    network.CompareSample(tmi, tmt, tso, tloss);
+    std::cout << "before train loss:" << tloss << endl;
+    checktest(tmt, tso);
+
+    // 训练数据
     MatrixXf mi(insz, batch);
     MatrixXf mt(outsz, batch);
 
@@ -74,11 +111,6 @@ int main()
     float loss = 0;
 
     for (int i = 0; i < epochs; i++) {
-        // 计算loss
-        test.ReadRandom(mi, mt, batch);
-        network.CompareSample(mi, mt, so, loss);
-        std::cout << "loss:" << loss << endl;
-
         auto start = steady_clock::now();
 
         train.Shuffle();
@@ -97,45 +129,24 @@ int main()
             network.SGD();
         }
 
-        // 计算loss
-        test.ReadRandom(mi, mt, batch);
-        network.CompareSample(mi, mt, so, loss);
-        std::cout << "loss:" << loss << endl;
-
         // 运行时间
         auto elapse = steady_clock::now() - start;
-        auto sec = duration_cast<seconds>(elapse);
-        std::cout << "use " << sec.count() << " seconds" << endl;
+        auto msec = duration_cast<milliseconds>(elapse);
+        std::cout << "epoch " << i + 1 << " use " << msec.count() << " milliseconds" << endl;
     }
 
-#ifdef START_FROM_RECORD
+    // 训练后计算正确率(同一组数据)
+    network.CompareSample(tmi, tmt, tso, tloss);
+    std::cout << "after train loss:" << tloss << endl;
+    checktest(tmt, tso);
 
-#else
-    // 记录训练后的网络
-    network.Save(record);
-#endif
+    std::cout << "do you want to save the nerual network? Y/N" << endl;
 
-    // 计算正确率
-    int cnt = 0;
-    for (int i = 0; i < batch; i++) {
-        const auto& col1 = mt.col(i);
-        const auto& col2 = so.col(i);
-        int idx1 = 0, idx2 = 0;
-        for (int j = 0; j < col1.rows(); j++) {
-            if (col1(j) > col1(idx1)) {
-                idx1 = j;
-            }
-
-            if (col2(j) > col2(idx2)) {
-                idx2 = j;
-            }
-        }
-        if (idx1 == idx2) {
-            cnt++;
-        }
+    char keyin;
+    std::cin >> keyin;
+    if (keyin == 'y' || keyin == 'Y') {
+        network.Save(record);
     }
-
-    std::cout << (float)cnt / batch * 100 << "%" << endl;
 
     return 0;
 }

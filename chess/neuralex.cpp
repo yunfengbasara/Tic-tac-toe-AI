@@ -22,7 +22,7 @@ util::NeuralEx::NeuralEx()
     }
 
     checkCudaErrors(cuModuleGetFunction(
-        &m_fColwiseAdd, m_nModule, "colwiseAdd"));
+        &m_fColwiseAdd, m_nModule, "colwiseAdd2"));
 
     checkCudaErrors(cuModuleGetFunction(
         &m_fActivation, m_nModule, "activation"));
@@ -38,7 +38,6 @@ util::NeuralEx::NeuralEx()
     
     checkCudaErrors(cuModuleGetFunction(
         &m_fUpdate, m_nModule, "update"));
-    
 }
 
 util::NeuralEx::~NeuralEx()
@@ -415,16 +414,21 @@ void util::NeuralEx::FeedForward()
             &beta, 
             (float*)m_vInputSum[i].data, m_vInputSum[i].rows));
 
+        dim3 block(32, 32);
+        int gx = (width + block.x - 1) / block.x;
+        int gy = (height + block.y - 1) / block.y;
+
         // ¼ÆËãÆ«ÒÆ
         void* addparams[] = 
         {
-            (void*)&m_vInputSum[i].data, (void*)&m_vInputSum[i].width,
-            (void*)&m_vBiases[i].data, (void*)&m_vBiases[i].width,
-            (void*)&m_vInputSum[i].data, (void*)&m_vInputSum[i].width
+            (void*)&m_vInputSum[i].data, (void*)&m_vInputSum[i].width,(void*)&m_vInputSum[i].height,
+            (void*)&m_vBiases[i].data, (void*)&m_vBiases[i].width,(void*)&m_vBiases[i].height,
+            (void*)&m_vInputSum[i].data, (void*)&m_vInputSum[i].width,(void*)&m_vInputSum[i].height,
+            (void*)&block.x, (void*)&block.y,
         };
 
         checkCudaErrors(cuLaunchKernel(m_fColwiseAdd,
-            height, 1, 1, width, 1, 1,
+            gx, gy, 1, block.x, block.y, 1,
             0, nullptr, &addparams[0], 0));
 
         // ¼¤»î
