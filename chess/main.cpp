@@ -20,7 +20,7 @@ using namespace Eigen;
 using namespace util;
 
 // 从本地训练记录开始
-#define START_FROM_RECORD
+//#define START_FROM_RECORD
 
 // cuda加速
 #define CUDA_NEURAL
@@ -74,6 +74,7 @@ int main()
 
 #ifdef CUDA_NEURAL
     NeuralEx network;
+    network.SetCostType(NeuralEx::CrossEntropy);
 #else 
     Neural network;
 #endif
@@ -90,7 +91,7 @@ int main()
     int epochs = 10;
 
     // 批处理大小
-    int batch = 32;
+    int batch = 64;
 
     // 训练前计算正确率
     MatrixXf tmi(insz, batch);
@@ -129,10 +130,16 @@ int main()
             network.SGD();
         }
 
+        // 测试同一批数据
+        network.CompareSample(tmi, tmt, tso, tloss);
+
         // 运行时间
         auto elapse = steady_clock::now() - start;
         auto msec = duration_cast<milliseconds>(elapse);
-        std::cout << "epoch " << i + 1 << " use " << msec.count() << " milliseconds" << endl;
+        std::cout << 
+            " epoch " << i + 1 << 
+            " loss " << tloss <<
+            " use " << msec.count() << " milliseconds" << endl;
     }
 
     // 训练后计算正确率(同一组数据)

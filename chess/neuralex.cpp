@@ -31,7 +31,10 @@ util::NeuralEx::NeuralEx()
         &m_fActivatePrime, m_nModule, "activatePrime"));
 
     checkCudaErrors(cuModuleGetFunction(
-        &m_fDeltaTarget, m_nModule, "deltaTarget"));
+        &m_fDeltaQuadratic, m_nModule, "deltaQuadratic"));
+
+    checkCudaErrors(cuModuleGetFunction(
+        &m_fDeltaCrossEntropy, m_nModule, "deltaCrossEntropy"));
 
     checkCudaErrors(cuModuleGetFunction(
         &m_fArrayMul, m_nModule, "arrayMul"));
@@ -206,9 +209,20 @@ bool util::NeuralEx::CompareSample(
 
     out = CreateHOSTMatrix(m_vActivations.back());
 
+    switch (m_nCost) {
     // 损失函数:loss = 1/2*(t - E)^2
-    HOSTMatrix E = 1.0f / 2.0f * (target.array() - out.array()).pow(2);
-    loss = E.sum() / out.cols();
+    case Quadratic: {
+        HOSTMatrix E = 1.0f / 2.0f * (target.array() - out.array()).pow(2);
+        loss = E.sum() / out.cols();
+    }
+        break;
+    // 损失函数:loss = -ylna - (1-y)ln(1 - a)
+    case CrossEntropy: {
+        HOSTMatrix E = -target.array() * out.array().log() - (1 - target.array()) * (1 - out.array()).array().log();
+        loss = E.sum() / out.cols();
+    }
+        break;
+    }
 
     return true;
 }
@@ -216,6 +230,11 @@ bool util::NeuralEx::CompareSample(
 void util::NeuralEx::SetLearnRate(float eta)
 {
     m_fEta = eta;
+}
+
+void util::NeuralEx::SetCostType(CostType type)
+{
+    m_nCost = type;
 }
 
 void util::NeuralEx::SGD()
@@ -447,33 +466,48 @@ void util::NeuralEx::FeedForward()
 void util::NeuralEx::BackPropLast()
 {
     // 求目标误差
-    // 误差函数:loss = 1/2*(t - E)^2
-    // 误差函数导数:loss' = E - t
     CUDAMatrix z = m_vActivations.back();
-    CUDAMatrix t = m_nSG;
-
-    void* params[] =
-    {
-        (void*)&z.data, (void*)&z.width,
-        (void*)&t.data, (void*)&t.width
-    };
-
-    checkCudaErrors(cuLaunchKernel(m_fActivatePrime,
-        z.height, 1, 1, z.width, 1, 1,
-        0, nullptr, &params[0], 0));
-
     CUDAMatrix d = m_vDelta.back();
-    void* deltaparams[] =
-    {
-        (void*)&z.data, (void*)&z.width,
-        (void*)&m_mTarget.data, (void*)&m_mTarget.width,
-        (void*)&t.data, (void*)&t.width,
-        (void*)&d.data, (void*)&d.width,
-    };
 
-    checkCudaErrors(cuLaunchKernel(m_fDeltaTarget,
-        z.height, 1, 1, z.width, 1, 1,
-        0, nullptr, &deltaparams[0], 0));
+    switch (m_nCost) {
+    case Quadratic: {
+        void* params[] =
+        {
+            (void*)&z.data, (void*)&z.width,
+            (void*)&m_nSG.data, (void*)&m_nSG.width
+        };
+
+        checkCudaErrors(cuLaunchKernel(m_fActivatePrime,
+            z.height, 1, 1, z.width, 1, 1,
+            0, nullptr, &params[0], 0));
+
+        void* deltaparams[] =
+        {
+            (void*)&z.data, (void*)&z.width,
+            (void*)&m_mTarget.data, (void*)&m_mTarget.width,
+            (void*)&m_nSG.data, (void*)&m_nSG.width,
+            (void*)&d.data, (void*)&d.width,
+        };
+
+        checkCudaErrors(cuLaunchKernel(m_fDeltaQuadratic,
+            z.height, 1, 1, z.width, 1, 1,
+            0, nullptr, &deltaparams[0], 0));
+    }
+    break;
+    case CrossEntropy: {
+        void* deltaparams[] =
+        {
+            (void*)&z.data, (void*)&z.width,
+            (void*)&m_mTarget.data, (void*)&m_mTarget.width,
+            (void*)&d.data, (void*)&d.width,
+        };
+
+        checkCudaErrors(cuLaunchKernel(m_fDeltaCrossEntropy,
+            z.height, 1, 1, z.width, 1, 1,
+            0, nullptr, &deltaparams[0], 0));
+    }
+    break;
+    }
 
     // 偏移按行求和
     CUDAMatrix b = m_vNabla_b.back();

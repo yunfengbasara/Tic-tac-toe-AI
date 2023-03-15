@@ -124,7 +124,7 @@ extern "C" __global__ void activatePrime(
 /*
 * ¼ÆËãÆ«ÒÆµ¼Êý
 */
-extern "C" __global__ void deltaTarget(
+extern "C" __global__ void deltaQuadratic(
     float* a, int aw,
     float* b, int bw,
     float* c, int cw,
@@ -137,6 +137,19 @@ extern "C" __global__ void deltaTarget(
     tmp *= c[cw * bx + tx];
 
     d[dw * bx + tx] = tmp;
+}
+
+extern "C" __global__ void deltaCrossEntropy(
+    float* a, int aw,
+    float* b, int bw,
+    float* c, int cw)
+{
+    int bx = blockIdx.x;
+    int tx = threadIdx.x;
+
+    float tmp = a[aw * bx + tx] - b[bw * bx + tx];
+
+    c[cw * bx + tx] = tmp;
 }
 
 /*

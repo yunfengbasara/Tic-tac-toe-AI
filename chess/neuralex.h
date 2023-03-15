@@ -13,6 +13,12 @@ namespace util
 		NeuralEx();
 		~NeuralEx();
 
+		// 损失函数
+		enum CostType {
+			Quadratic = 0,		//	1 / 2 * (t - E) ^ 2
+			CrossEntropy = 1,	//	-ylna - (1-y)ln(1 - a)
+		};
+
 		// 初始化
 		bool InitBuild(std::vector<int> p);
 
@@ -31,6 +37,7 @@ namespace util
 		);
 
 		void SetLearnRate(float eta);
+		void SetCostType(CostType type);
 
 		// 随机梯度下降
 		void SGD();
@@ -62,6 +69,9 @@ namespace util
 
 		// 学习速率
 		float m_fEta = 0.3;
+
+		// 损失函数类型
+		CostType m_nCost = Quadratic;
 
 		// 每层节点个数
 		std::vector<int> m_vNetParam;
@@ -101,11 +111,12 @@ namespace util
 		CUfunction m_fColwiseAdd = nullptr;
 		CUfunction m_fActivation = nullptr;
 		CUfunction m_fActivatePrime = nullptr;
-		CUfunction m_fDeltaTarget = nullptr;
+		CUfunction m_fDeltaQuadratic = nullptr;
+		CUfunction m_fDeltaCrossEntropy = nullptr;
 		CUfunction m_fArrayMul = nullptr;
 		CUfunction m_fUpdate = nullptr;
 
-		// 目标偏差临时变量
+		// 目标偏差临时变量（Quadratic方法）
 		CUDAMatrix m_nSG;
 
 		// 偏导临时变量求和
