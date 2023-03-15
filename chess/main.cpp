@@ -71,6 +71,7 @@ int main()
 
     int insz, outsz;
     train.GetInOut(insz, outsz);
+    int items = train.GetTotalItems();
 
 #ifdef CUDA_NEURAL
     NeuralEx network;
@@ -86,6 +87,8 @@ int main()
 #endif
 
     network.SetLearnRate(0.1);
+    network.SetRegularization(5.0);
+    network.SetTotalItem(items);
 
     // 迭代次数
     int epochs = 10;
@@ -130,15 +133,16 @@ int main()
             network.SGD();
         }
 
-        // 测试同一批数据
-        network.CompareSample(tmi, tmt, tso, tloss);
+        // 测试训练数据
+        train.ReadRandom(mi, mt, batch);
+        network.CompareSample(mi, mt, so, loss);
 
         // 运行时间
         auto elapse = steady_clock::now() - start;
         auto msec = duration_cast<milliseconds>(elapse);
         std::cout << 
             " epoch " << i + 1 << 
-            " loss " << tloss <<
+            " loss " << loss <<
             " use " << msec.count() << " milliseconds" << endl;
     }
 

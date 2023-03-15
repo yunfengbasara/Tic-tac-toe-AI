@@ -88,6 +88,11 @@ void util::Analyze_IDX::GetInOut(int& in, int& out)
 	out = m_nOutDim;
 }
 
+int util::Analyze_IDX::GetTotalItems()
+{
+	return m_nItems;
+}
+
 void util::Analyze_IDX::Shuffle()
 {
 	m_nStart = 0;

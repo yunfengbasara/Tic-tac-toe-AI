@@ -18,6 +18,7 @@ namespace util
 		);
 
 		void GetInOut(int& in, int& out);
+		int GetTotalItems();
 		void Shuffle();
 		
 		int ReadSample(

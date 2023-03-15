@@ -167,9 +167,9 @@ extern "C" __global__ void arrayMul(
 }
 
 /*
-* 更新函数
+* 更新bias函数
 */
-extern "C" __global__ void update(
+extern "C" __global__ void updateBias(
     float* a, int aw,
     float* b, int bw,
     float eta, int batch)
@@ -177,9 +177,23 @@ extern "C" __global__ void update(
     int bx = blockIdx.x;
     int tx = threadIdx.x;
 
-    float tmp = a[aw * bx + tx];
-    tmp /= batch;
-    tmp *= eta;
-
+    float tmp = a[aw * bx + tx] * eta / batch;
     b[bw * bx + tx] -= tmp;
+}
+
+/*
+* 更新weight函数
+*/
+extern "C" __global__ void updateWeight(
+    float* a, int aw,
+    float* b, int bw,
+    float eta, int batch,
+    float lambda, int items)
+{
+    int bx = blockIdx.x;
+    int tx = threadIdx.x;
+
+    float tmp = a[aw * bx + tx] * eta / batch;
+    float w = (1 - eta * (lambda / items)) * b[bw * bx + tx];
+    b[bw * bx + tx] = w - tmp;
 }

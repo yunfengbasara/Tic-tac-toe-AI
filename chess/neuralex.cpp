@@ -40,7 +40,10 @@ util::NeuralEx::NeuralEx()
         &m_fArrayMul, m_nModule, "arrayMul"));
     
     checkCudaErrors(cuModuleGetFunction(
-        &m_fUpdate, m_nModule, "update"));
+        &m_fUpdateBias, m_nModule, "updateBias"));
+
+    checkCudaErrors(cuModuleGetFunction(
+        &m_fUpdateWeight, m_nModule, "updateWeight"));
 }
 
 util::NeuralEx::~NeuralEx()
@@ -232,9 +235,19 @@ void util::NeuralEx::SetLearnRate(float eta)
     m_fEta = eta;
 }
 
+void util::NeuralEx::SetRegularization(float lambda)
+{
+    m_fLambda = lambda;
+}
+
 void util::NeuralEx::SetCostType(CostType type)
 {
     m_nCost = type;
+}
+
+void util::NeuralEx::SetTotalItem(int count)
+{
+    m_nTotalItem = count;
 }
 
 void util::NeuralEx::SGD()
@@ -617,7 +630,7 @@ void util::NeuralEx::Update()
             (void*)&m_fEta, (void*)&m_nBatch,
         };
 
-        checkCudaErrors(cuLaunchKernel(m_fUpdate,
+        checkCudaErrors(cuLaunchKernel(m_fUpdateBias,
             b.height, 1, 1, b.width, 1, 1,
             0, nullptr, &update[0], 0));
     }
@@ -632,9 +645,10 @@ void util::NeuralEx::Update()
             (void*)&nw.data, (void*)&nw.width,
             (void*)&w.data, (void*)&w.width,
             (void*)&m_fEta, (void*)&m_nBatch,
+            (void*)&m_fLambda, (void*)&m_nTotalItem,
         };
 
-        checkCudaErrors(cuLaunchKernel(m_fUpdate,
+        checkCudaErrors(cuLaunchKernel(m_fUpdateWeight,
             w.height, 1, 1, w.width, 1, 1,
             0, nullptr, &update[0], 0));
     }

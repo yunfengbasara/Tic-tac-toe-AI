@@ -37,7 +37,9 @@ namespace util
 		);
 
 		void SetLearnRate(float eta);
+		void SetRegularization(float lambda);
 		void SetCostType(CostType type);
+		void SetTotalItem(int count);
 
 		// 随机梯度下降
 		void SGD();
@@ -69,6 +71,12 @@ namespace util
 
 		// 学习速率
 		float m_fEta = 0.3;
+
+		// regularization参数
+		float m_fLambda = 5.0;
+
+		// 训练数据大小
+		int m_nTotalItem = 0;
 
 		// 损失函数类型
 		CostType m_nCost = Quadratic;
@@ -114,7 +122,8 @@ namespace util
 		CUfunction m_fDeltaQuadratic = nullptr;
 		CUfunction m_fDeltaCrossEntropy = nullptr;
 		CUfunction m_fArrayMul = nullptr;
-		CUfunction m_fUpdate = nullptr;
+		CUfunction m_fUpdateBias = nullptr;
+		CUfunction m_fUpdateWeight = nullptr;
 
 		// 目标偏差临时变量（Quadratic方法）
 		CUDAMatrix m_nSG;
