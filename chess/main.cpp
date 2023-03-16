@@ -13,17 +13,141 @@
 #include "neuralex.h"
 #include "type.h"
 #include "../Eigen/Core"
+#include "TicRule.h"
 
 using namespace std;
 using namespace std::chrono;
 using namespace Eigen;
 using namespace util;
+using namespace chess;
 
 // 从本地训练记录开始
 //#define START_FROM_RECORD
 
 // cuda加速
 #define CUDA_NEURAL
+
+int main() {
+    auto seed = std::default_random_engine(std::random_device()());
+
+    // 随机棋盘记录
+    typedef std::pair<Matrix3i, Matrix3f> SAMPLE;
+    std::vector<SAMPLE> record;
+
+    // 随机产生
+    int count = 3200;
+    record.resize(count);
+
+    // 落子范围随机走法
+    std::vector<int> steps = { 0,1,2,3,4,5,6,7,8 };
+
+    // 规则
+    Tic ticRule;
+    // 结果
+    Tic::GameType result;
+    // 验证最后一步
+    int last;
+
+    for (auto& item : record) {
+        std::shuffle(steps.begin(), steps.end(), seed);
+        ticRule.Reset();
+
+        if (!ticRule.Create(steps, item.first, result, last)) {
+            return -1;
+        }
+
+        if (result == Tic::GameType::DRAW) {
+            item.second.setConstant(0.1f);
+            continue;
+        }
+
+        // 去掉最后一步
+        item.first(last / 3, last % 3) = 0;
+
+        item.second.setConstant(0);
+        item.second(last / 3, last % 3) = 1.0f;
+    }
+
+    // 训练
+    int epochs = 50;
+    int batch = 64;
+
+    MatrixXf mi(9, batch);
+    MatrixXf mt(9, batch);
+    MatrixXf so;
+    float loss = 0;
+
+    srand((unsigned int)time(0));
+    NeuralEx network;
+    network.SetCostType(NeuralEx::CrossEntropy);
+    network.InitBuild({ 9, 100, 9 });
+    network.SetLearnRate(0.088);
+    network.SetRegularization(5.0);
+    network.SetTotalItem(count);
+
+    for (int i = 0; i < epochs; i++) {
+        auto start = steady_clock::now();
+
+        std::shuffle(record.begin(), record.end(), seed);
+
+        for (int k = 0; k < count; k += batch) {
+            int sz = batch;
+            if (k + batch > count) {
+                sz = count - k;
+            }
+
+            if (sz == 0) {
+                std::cout << "batch = 0" << std::endl;
+                continue;
+            }
+
+            if (mi.cols() != sz) {
+                mi.resize(NoChange, sz);
+                mt.resize(NoChange, sz);
+            }
+
+            for (int m = 0; m < sz; m++) {
+                const SAMPLE& s = record[k + m];
+                mi.col(m) = Map<VectorXf>((float*)s.first.data(), 9);
+                mt.col(m) = Map<VectorXf>((float*)s.second.data(), 9);
+            }
+
+            if (!network.SetSample(mi, mt)) {
+                break;
+            }
+
+            network.SGD();
+        }
+
+        //network.CompareSample(mi, mt, so, loss);
+
+        auto elapse = steady_clock::now() - start;
+        auto msec = duration_cast<milliseconds>(elapse);
+        //std::cout <<
+        //    " epoch " << i + 1 <<
+        //    " loss " << loss <<
+        //    " use " << msec.count() << " milliseconds" << endl;
+    }
+
+    // 验证
+    network.CompareSample(mi, mt, so, loss);
+    std::cout << "loss " << loss <<  std::endl;
+
+    //for (int i = 0; i < mi.cols(); i++) {
+    //    Matrix3i board = Map<Matrix3i>((int*)mi.col(i).data());
+    //    Matrix3f target = Map<Matrix3f>((float*)mt.col(i).data());
+    //    Matrix3f answer = Map<Matrix3f>((float*)so.col(i).data());
+
+    //    std::cout << "board" << std::endl;
+    //    std::cout << board << std::endl;
+    //    std::cout << "target" << std::endl;
+    //    std::cout << target << std::endl;
+    //    std::cout << "AI answer" << std::endl;
+    //    std::cout << answer << std::endl;
+    //}
+    
+    return 0;
+}
 
 void checktest(MatrixXf mt, MatrixXf so) {
     int batch = mt.cols();
@@ -50,7 +174,7 @@ void checktest(MatrixXf mt, MatrixXf so) {
     std::cout << (float)cnt / batch * 100 << "%" << endl;
 }
 
-int main()
+int mainHandWrite()
 {
     srand((unsigned int)time(0));
 
@@ -83,7 +207,7 @@ int main()
 #ifdef START_FROM_RECORD
     network.Load(record);
 #else
-    network.InitBuild({ insz, 100, outsz });
+    network.InitBuild({ insz, 160, outsz });
 #endif
 
     network.SetLearnRate(0.1);
@@ -91,7 +215,7 @@ int main()
     network.SetTotalItem(items);
 
     // 迭代次数
-    int epochs = 10;
+    int epochs = 1;
 
     // 批处理大小
     int batch = 64;

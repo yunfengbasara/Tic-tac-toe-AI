@@ -12,6 +12,9 @@
     <Filter Include="util">
       <UniqueIdentifier>{f4afd7e6-8d8b-43cf-a018-ada59fb1b8e3}</UniqueIdentifier>
     </Filter>
+    <Filter Include="chess">
+      <UniqueIdentifier>{835b9563-9b89-465a-871f-90615cbc83c5}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -38,6 +41,9 @@
     <ClCompile Include="type.cpp">
       <Filter>util</Filter>
     </ClCompile>
+    <ClCompile Include="TicRule.cpp">
+      <Filter>chess</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Analyze.h">
@@ -54,6 +60,9 @@
     </ClInclude>
     <ClInclude Include="type.h">
       <Filter>util</Filter>
+    </ClInclude>
+    <ClInclude Include="TicRule.h">
+      <Filter>chess</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
