@@ -21,6 +21,31 @@ using namespace Eigen;
 using namespace util;
 using namespace chess;
 
+void checktest(MatrixXf mt, MatrixXf so) {
+    int batch = mt.cols();
+
+    int cnt = 0;
+    for (int i = 0; i < batch; i++) {
+        const auto& col1 = mt.col(i);
+        const auto& col2 = so.col(i);
+        int idx1 = 0, idx2 = 0;
+        for (int j = 0; j < col1.rows(); j++) {
+            if (col1(j) > col1(idx1)) {
+                idx1 = j;
+            }
+
+            if (col2(j) > col2(idx2)) {
+                idx2 = j;
+            }
+        }
+        if (idx1 == idx2) {
+            cnt++;
+        }
+    }
+
+    std::cout << (float)cnt / batch * 100 << "%" << endl;
+}
+
 // 从本地训练记录开始
 //#define START_FROM_RECORD
 
@@ -69,7 +94,7 @@ int main() {
     }
 
     // 训练
-    int epochs = 50;
+    int epochs = 100;
     int batch = 64;
 
     MatrixXf mi(9, batch);
@@ -81,13 +106,11 @@ int main() {
     NeuralEx network;
     network.SetCostType(NeuralEx::CrossEntropy);
     network.InitBuild({ 9, 100, 9 });
-    network.SetLearnRate(0.088);
+    network.SetLearnRate(0.1);
     network.SetRegularization(5.0);
     network.SetTotalItem(count);
 
     for (int i = 0; i < epochs; i++) {
-        auto start = steady_clock::now();
-
         std::shuffle(record.begin(), record.end(), seed);
 
         for (int k = 0; k < count; k += batch) {
@@ -108,7 +131,7 @@ int main() {
 
             for (int m = 0; m < sz; m++) {
                 const SAMPLE& s = record[k + m];
-                mi.col(m) = Map<VectorXf>((float*)s.first.data(), 9);
+                mi.col(m) = Map<VectorXi>((int*)s.first.data(), 9).cast<float>();
                 mt.col(m) = Map<VectorXf>((float*)s.second.data(), 9);
             }
 
@@ -118,23 +141,16 @@ int main() {
 
             network.SGD();
         }
-
-        //network.CompareSample(mi, mt, so, loss);
-
-        auto elapse = steady_clock::now() - start;
-        auto msec = duration_cast<milliseconds>(elapse);
-        //std::cout <<
-        //    " epoch " << i + 1 <<
-        //    " loss " << loss <<
-        //    " use " << msec.count() << " milliseconds" << endl;
     }
 
     // 验证
     network.CompareSample(mi, mt, so, loss);
     std::cout << "loss " << loss <<  std::endl;
 
+    checktest(mt, so);
+
     //for (int i = 0; i < mi.cols(); i++) {
-    //    Matrix3i board = Map<Matrix3i>((int*)mi.col(i).data());
+    //    Matrix3f board = Map<Matrix3f>((float*)mi.col(i).data());
     //    Matrix3f target = Map<Matrix3f>((float*)mt.col(i).data());
     //    Matrix3f answer = Map<Matrix3f>((float*)so.col(i).data());
 
@@ -147,31 +163,6 @@ int main() {
     //}
     
     return 0;
-}
-
-void checktest(MatrixXf mt, MatrixXf so) {
-    int batch = mt.cols();
-
-    int cnt = 0;
-    for (int i = 0; i < batch; i++) {
-        const auto& col1 = mt.col(i);
-        const auto& col2 = so.col(i);
-        int idx1 = 0, idx2 = 0;
-        for (int j = 0; j < col1.rows(); j++) {
-            if (col1(j) > col1(idx1)) {
-                idx1 = j;
-            }
-
-            if (col2(j) > col2(idx2)) {
-                idx2 = j;
-            }
-        }
-        if (idx1 == idx2) {
-            cnt++;
-        }
-    }
-
-    std::cout << (float)cnt / batch * 100 << "%" << endl;
 }
 
 int mainHandWrite()
