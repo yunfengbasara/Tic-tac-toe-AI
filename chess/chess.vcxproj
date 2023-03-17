@@ -161,6 +161,7 @@
     <ClCompile Include="Analyze.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="neural.cpp" />
+    <ClCompile Include="QTable.cpp" />
     <ClCompile Include="TicRule.cpp" />
     <ClCompile Include="trans.cpp" />
     <ClCompile Include="type.cpp" />
@@ -169,6 +170,7 @@
   <ItemGroup>
     <ClInclude Include="Analyze.h" />
     <ClInclude Include="neural.h" />
+    <ClInclude Include="QTable.h" />
     <ClInclude Include="TicRule.h" />
     <ClInclude Include="trans.h" />
     <ClInclude Include="type.h" />

@@ -14,6 +14,7 @@
 #include "type.h"
 #include "../Eigen/Core"
 #include "TicRule.h"
+#include "QTable.h"
 
 using namespace std;
 using namespace std::chrono;
@@ -45,12 +46,6 @@ void checktest(MatrixXf mt, MatrixXf so) {
 
     std::cout << (float)cnt / batch * 100 << "%" << endl;
 }
-
-// 从本地训练记录开始
-//#define START_FROM_RECORD
-
-// cuda加速
-#define CUDA_NEURAL
 
 int main() {
     auto seed = std::default_random_engine(std::random_device()());
@@ -89,12 +84,12 @@ int main() {
         // 去掉最后一步
         item.first(last / 3, last % 3) = 0;
 
-        item.second.setConstant(0);
+        item.second.setConstant(0.0f);
         item.second(last / 3, last % 3) = 1.0f;
     }
 
     // 训练
-    int epochs = 100;
+    int epochs = 50;
     int batch = 64;
 
     MatrixXf mi(9, batch);
@@ -105,7 +100,7 @@ int main() {
     srand((unsigned int)time(0));
     NeuralEx network;
     network.SetCostType(NeuralEx::CrossEntropy);
-    network.InitBuild({ 9, 100, 9 });
+    network.InitBuild({ 9, 300, 9 });
     network.SetLearnRate(0.1);
     network.SetRegularization(5.0);
     network.SetTotalItem(count);
@@ -141,6 +136,9 @@ int main() {
 
             network.SGD();
         }
+
+        network.CompareSample(mi, mt, so, loss);
+        std::cout << "loss " << loss << std::endl;
     }
 
     // 验证
@@ -164,6 +162,12 @@ int main() {
     
     return 0;
 }
+
+// 从本地训练记录开始
+//#define START_FROM_RECORD
+
+// cuda加速
+#define CUDA_NEURAL
 
 int mainHandWrite()
 {

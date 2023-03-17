@@ -44,6 +44,9 @@
     <ClCompile Include="TicRule.cpp">
       <Filter>chess</Filter>
     </ClCompile>
+    <ClCompile Include="QTable.cpp">
+      <Filter>chess</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Analyze.h">
@@ -62,6 +65,9 @@
       <Filter>util</Filter>
     </ClInclude>
     <ClInclude Include="TicRule.h">
+      <Filter>chess</Filter>
+    </ClInclude>
+    <ClInclude Include="QTable.h">
       <Filter>chess</Filter>
     </ClInclude>
   </ItemGroup>
