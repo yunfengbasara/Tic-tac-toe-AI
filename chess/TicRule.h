@@ -1,5 +1,6 @@
 #pragma once
 #include <vector>
+#include <array>
 #include "../Eigen/Core"
 
 namespace chess
@@ -22,20 +23,38 @@ namespace chess
 		Tic();
 		~Tic();
 
+		const Eigen::Matrix3i& Board();
+
+		// 重置
 		void Reset();
-		int RandomPos();
+
+		// 随机下一个位置
+		uint16_t RandomPos();
+
+		// 获取空位置中得分最高的位置
+		uint16_t MaxScorePos(const Eigen::Matrix3f& score);
+
+		// 创建当前局面初始化分数
+		Eigen::Matrix3f CreateValue(float score);
+
+		// 创建随机对局
 		bool Create(const std::vector<int>& steps, 
 			Eigen::Matrix3i& board,
 			GameType& type, int& lp);
 
-	private:
+		// 在索引位置放下role棋子
 		bool Turn(RoleType role, int idx);
+
+		// 撤销该位置的棋子
+		bool Revoke(int idx);
+
+		// 检查本局是否结束
 		GameType Check(int idx);
 
-	private:
-		// 当前轮到的棋子
-		RoleType		m_nRole;
+		// 反转棋子
+		void Reverse();
 
+	private:
 		// 空位置数量
 		uint16_t		m_nEmpCnt;
 
@@ -44,5 +63,8 @@ namespace chess
 
 		// 棋盘数据 0:null 1:x 2:o
 		Eigen::Matrix3i m_nBoard;
+
+		// 反转棋盘,便于快速获取反转棋盘
+		Eigen::Matrix3i	m_nRBoard;
 	};
 }

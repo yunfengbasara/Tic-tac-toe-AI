@@ -15,21 +15,28 @@ chess::Tic::~Tic()
 
 void chess::Tic::Reset()
 {
-	m_nRole = CROSS;
-
 	m_nEmpCnt = 9;
 
 	// 低九位为可用位置
 	m_nIndex = 0x01FF;
 
 	m_nBoard.setZero();
+
+	m_nRBoard.setZero();
+}
+
+const Eigen::Matrix3i& chess::Tic::Board()
+{
+	return m_nBoard;
 }
 
 bool chess::Tic::Create(const std::vector<int>& steps, 
 	Eigen::Matrix3i& board, GameType& type, int& lp)
 {
+	RoleType role = CROSS;
+
 	for (const auto& pos : steps) {
-		if (!Turn(m_nRole, pos)) {
+		if (!Turn(role, pos)) {
 			return false;
 		}
 
@@ -40,13 +47,13 @@ bool chess::Tic::Create(const std::vector<int>& steps,
 			return true;
 		}
 
-		m_nRole = m_nRole == CROSS ? CIRCLE : CROSS;
+		role = role == CROSS ? CIRCLE : CROSS;
 	}
 
 	return false;
 }
 
-int chess::Tic::RandomPos()
+uint16_t chess::Tic::RandomPos()
 {
 	int cnt = std::random_device()() % m_nEmpCnt;
 	uint16_t pidx = m_nIndex;
@@ -57,6 +64,45 @@ int chess::Tic::RandomPos()
 
 	uint16_t t = pidx & (pidx - 1);
 	return std::log2(t ^ pidx);
+}
+
+uint16_t chess::Tic::MaxScorePos(const Eigen::Matrix3f& score)
+{
+	uint16_t midx = 100;
+
+	uint16_t pidx = m_nIndex;
+	while (pidx > 0) {
+		uint16_t t = pidx & (pidx - 1);
+		uint16_t idx = std::log2(t ^ pidx);
+		pidx = t;
+
+		if (midx == 100) {
+			midx = idx;
+			continue;
+		}
+
+		if (score(midx / 3, midx % 3) <
+			score(idx / 3, idx % 3)) {
+			midx = idx;
+		}
+	}
+
+	return midx;
+}
+
+Eigen::Matrix3f chess::Tic::CreateValue(float score)
+{
+	Eigen::Matrix3f value = Eigen::Matrix3f::Zero();
+
+	uint16_t pidx = m_nIndex;
+	while (pidx > 0) {
+		uint16_t t = pidx & (pidx - 1);
+		uint16_t idx = std::log2(t ^ pidx);
+		pidx = t;
+
+		value(idx / 3, idx % 3) = score;
+	}
+	return value;
 }
 
 bool chess::Tic::Turn(RoleType role, int idx)
@@ -70,8 +116,29 @@ bool chess::Tic::Turn(RoleType role, int idx)
 
 	m_nIndex &= ~pos;
 
-	int n = role == CROSS ? CIRCLE : CROSS;
+	int n = role == CROSS ? 1 : 2;
 	m_nBoard(idx / 3, idx % 3) = n;
+
+	int rn = role != CROSS ? 1 : 2;
+	m_nRBoard(idx / 3, idx % 3) = rn;
+
+	return true;
+}
+
+bool chess::Tic::Revoke(int idx)
+{
+	uint16_t pos = 1 << idx;
+	if ((m_nIndex & pos) == 1) {
+		return false;
+	}
+
+	m_nEmpCnt++;
+
+	m_nIndex |= pos;
+
+	m_nBoard(idx / 3, idx % 3) = 0;
+
+	m_nRBoard(idx / 3, idx % 3) = 0;
 
 	return true;
 }
@@ -129,4 +196,9 @@ Tic::GameType chess::Tic::Check(int idx)
 	}
 
 	return UNOVER;
+}
+
+void chess::Tic::Reverse()
+{
+	std::swap(m_nBoard, m_nRBoard);
 }

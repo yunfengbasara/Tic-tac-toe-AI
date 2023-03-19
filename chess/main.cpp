@@ -48,6 +48,14 @@ void checktest(MatrixXf mt, MatrixXf so) {
 }
 
 int main() {
+    // 生成Q表
+    QTable qTable;
+    qTable.Create();
+    qTable.Print();
+    return 0;
+
+
+
     auto seed = std::default_random_engine(std::random_device()());
 
     // 随机棋盘记录
