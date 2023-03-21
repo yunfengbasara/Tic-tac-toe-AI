@@ -31,8 +31,12 @@ namespace chess
 		// 随机下一个位置
 		uint16_t RandomPos();
 
-		// 获取空位置中得分最高的位置
-		uint16_t MaxScorePos(const Eigen::Matrix3f& score);
+		// 按顺序下一个位置
+		uint16_t NextPos();
+
+		// 获取当前盘面最大值
+		float GetMaxScore(const Eigen::Matrix3f& score,  
+			int& row, int& col);
 
 		// 创建当前局面初始化分数
 		Eigen::Matrix3f CreateValue(float score);

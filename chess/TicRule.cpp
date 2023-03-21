@@ -66,9 +66,21 @@ uint16_t chess::Tic::RandomPos()
 	return std::log2(t ^ pidx);
 }
 
-uint16_t chess::Tic::MaxScorePos(const Eigen::Matrix3f& score)
+uint16_t chess::Tic::NextPos()
 {
-	uint16_t midx = 100;
+	uint16_t pidx = m_nIndex;
+	uint16_t t = pidx & (pidx - 1);
+	uint16_t idx = std::log2(t ^ pidx);
+	return idx;
+}
+
+float chess::Tic::GetMaxScore(
+	const Eigen::Matrix3f& score,
+	int& row, int& col)
+{
+	float maxvalue = 0;
+	row = -1;
+	col = -1;
 
 	uint16_t pidx = m_nIndex;
 	while (pidx > 0) {
@@ -76,18 +88,21 @@ uint16_t chess::Tic::MaxScorePos(const Eigen::Matrix3f& score)
 		uint16_t idx = std::log2(t ^ pidx);
 		pidx = t;
 
-		if (midx == 100) {
-			midx = idx;
+		if (row == -1) {
+			row = idx / 3;
+			col = idx % 3;
+			maxvalue = score(row, col);
 			continue;
 		}
 
-		if (score(midx / 3, midx % 3) <
-			score(idx / 3, idx % 3)) {
-			midx = idx;
+		if (maxvalue < score(idx / 3, idx % 3)) {
+			row = idx / 3;
+			col = idx % 3;
+			maxvalue = score(row, col);
 		}
 	}
 
-	return midx;
+	return maxvalue;
 }
 
 Eigen::Matrix3f chess::Tic::CreateValue(float score)
