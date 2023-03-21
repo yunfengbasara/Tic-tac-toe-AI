@@ -153,7 +153,8 @@ void QTable::Print()
 {
 	std::cout << "Q Table size " << m_mStore.size() << std::endl;
 
-	std::vector<int> steps = { 0,8 };
+	// 测试的开始几步
+	std::vector<int> steps = {0,3 };
 
 	int times = 1;
 	for (int i = 0; i < times; i++) {
@@ -164,9 +165,18 @@ void QTable::Print()
 
 		m_nRule.Reset();
 
+		m_nRole = Tic::RoleType::CROSS;
+
 		for (int k = 0; true; k++) {
-			const Matrix3i& board = m_nRule.Board();
-			memcpy(&bd[0], board.data(), 9 * sizeof(int));
+			if (m_nRole == Tic::RoleType::CROSS) {
+				const Matrix3i& board = m_nRule.Board();
+				memcpy(&bd[0], board.data(), 9 * sizeof(int));
+			}
+			else {
+				const Matrix3i& board = m_nRule.RBoard();
+				memcpy(&bd[0], board.data(), 9 * sizeof(int));
+			}
+
 			Matrix3f value = Matrix3f::Zero();
 
 			int idxpos;
@@ -185,18 +195,23 @@ void QTable::Print()
 				idxpos = steps[k];
 			}
 
-			std::cout << board << std::endl;
+			std::cout << m_nRule.Board() << std::endl;
 			std::cout << value << std::endl;
 			std::cout << "-----" << std::endl;
 
-			m_nRule.Turn(Tic::RoleType::CROSS, idxpos);
+			m_nRule.Turn(m_nRole, idxpos);
 			gameresult = m_nRule.Check(idxpos);
 
 			if (gameresult != Tic::GameType::UNOVER) {
 				break;
 			}
 
-			m_nRule.Reverse();
+			if (m_nRole == Tic::RoleType::CROSS) {
+				m_nRole = Tic::RoleType::CIRCLE;
+			}
+			else {
+				m_nRole = Tic::RoleType::CROSS;
+			}
 		}
 	}
 }

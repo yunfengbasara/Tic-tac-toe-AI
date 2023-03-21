@@ -24,6 +24,7 @@ namespace chess
 		~Tic();
 
 		const Eigen::Matrix3i& Board();
+		const Eigen::Matrix3i& RBoard();
 
 		// ÖØÖÃ
 		void Reset();

@@ -30,6 +30,11 @@ const Eigen::Matrix3i& chess::Tic::Board()
 	return m_nBoard;
 }
 
+const Eigen::Matrix3i& chess::Tic::RBoard()
+{
+	return m_nRBoard;
+}
+
 bool chess::Tic::Create(const std::vector<int>& steps, 
 	Eigen::Matrix3i& board, GameType& type, int& lp)
 {
