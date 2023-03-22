@@ -16,7 +16,7 @@ QTable::~QTable()
 
 void QTable::Create()
 {
-	int times = 50000;
+	int times = 70000;
 
 	std::array<int, 9> bd;
 	for (int i = 0; i <= times; i++) {
@@ -65,7 +65,7 @@ void QTable::Create()
 			}
 
 			// 本轮是否随机一个位置
-			bool useRandom = (std::random_device()() % 100) < 15;
+			bool useRandom = (std::random_device()() % 100) < 35;
 			if (useRandom) {
 				idxpos = m_nRule.RandomPos();
 			}
@@ -136,7 +136,7 @@ void QTable::UpdateQTable(STATUS& st, float maxvalue, bool print)
 		return;
 	}
 
-	float eta = 0.27;
+	float eta = 0.17;
 	auto& v = st.pItem->second(st.idxpos / 3, st.idxpos % 3);
 	v = (1 - eta) * v + eta * (st.reward + 0.8 * maxvalue);
 
@@ -154,7 +154,7 @@ void QTable::Print()
 	std::cout << "Q Table size " << m_mStore.size() << std::endl;
 
 	// 测试的开始几步
-	std::vector<int> steps = {0,3 };
+	std::vector<int> steps = {4,5};
 
 	int times = 1;
 	for (int i = 0; i < times; i++) {
