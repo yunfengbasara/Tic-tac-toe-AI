@@ -230,6 +230,20 @@ bool util::NeuralEx::CompareSample(
     return true;
 }
 
+bool util::NeuralEx::CalcActive(
+    HOSTMatrix& in, 
+    HOSTMatrix& out)
+{
+    if (!SetSample(in, in)) {
+        return false;
+    }
+
+    FeedForward();
+
+    out = CreateHOSTMatrix(m_vActivations.back());
+    return true;
+}
+
 void util::NeuralEx::SetLearnRate(float eta)
 {
     m_fEta = eta;

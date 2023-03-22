@@ -25,6 +25,7 @@ namespace chess
 
 		const Eigen::Matrix3i& Board();
 		const Eigen::Matrix3i& RBoard();
+		const int BDSZ();
 
 		// 重置
 		void Reset();
@@ -36,14 +37,19 @@ namespace chess
 		uint16_t NextPos();
 
 		// 获取当前盘面最大值
-		float GetMaxScore(const Eigen::Matrix3f& score,  
+		float GetMaxScore(
+			const Eigen::Matrix3f& score,  
 			int& row, int& col);
 
 		// 创建当前局面初始化分数
 		Eigen::Matrix3f CreateValue(float score);
 
+		// 设置不能落子的位置为0
+		void SetEmptyOnRole(Eigen::Matrix3f& value);
+
 		// 创建随机对局
-		bool Create(const std::vector<int>& steps, 
+		bool Create(
+			const std::vector<int>& steps, 
 			Eigen::Matrix3i& board,
 			GameType& type, int& lp);
 

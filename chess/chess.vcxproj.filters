@@ -47,6 +47,9 @@
     <ClCompile Include="QTable.cpp">
       <Filter>chess</Filter>
     </ClCompile>
+    <ClCompile Include="DQN.cpp">
+      <Filter>chess</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Analyze.h">
@@ -68,6 +71,9 @@
       <Filter>chess</Filter>
     </ClInclude>
     <ClInclude Include="QTable.h">
+      <Filter>chess</Filter>
+    </ClInclude>
+    <ClInclude Include="DQN.h">
       <Filter>chess</Filter>
     </ClInclude>
   </ItemGroup>

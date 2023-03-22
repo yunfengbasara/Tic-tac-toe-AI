@@ -36,6 +36,12 @@ namespace util
 			float& loss
 		);
 
+		// º∆À„ ‰≥ˆ
+		bool CalcActive(
+			HOSTMatrix& in,
+			HOSTMatrix& out
+		);
+
 		void SetLearnRate(float eta);
 		void SetRegularization(float lambda);
 		void SetCostType(CostType type);

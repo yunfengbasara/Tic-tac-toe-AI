@@ -15,6 +15,7 @@
 #include "../Eigen/Core"
 #include "TicRule.h"
 #include "QTable.h"
+#include "DQN.h"
 
 using namespace std;
 using namespace std::chrono;
@@ -49,9 +50,12 @@ void checktest(MatrixXf mt, MatrixXf so) {
 
 int main() {
     // Éú³ÉQ±í
-    QTable qTable;
-    qTable.Create();
-    qTable.Print();
+    //QTable qTable;
+    //qTable.Create();
+    //qTable.Print();
+
+    DQN dqn;
+    dqn.Create();
     return 0;
 
 

@@ -35,8 +35,15 @@ const Eigen::Matrix3i& chess::Tic::RBoard()
 	return m_nRBoard;
 }
 
-bool chess::Tic::Create(const std::vector<int>& steps, 
-	Eigen::Matrix3i& board, GameType& type, int& lp)
+const int chess::Tic::BDSZ()
+{
+	return sizeof(int) * m_nBoard.size();
+}
+
+bool chess::Tic::Create(
+	const std::vector<int>& steps, 
+	Eigen::Matrix3i& board, 
+	GameType& type, int& lp)
 {
 	RoleType role = CROSS;
 
@@ -83,7 +90,7 @@ float chess::Tic::GetMaxScore(
 	const Eigen::Matrix3f& score,
 	int& row, int& col)
 {
-	float maxvalue = 0;
+	float maxvalue = 0.0f;
 	row = -1;
 	col = -1;
 
@@ -123,6 +130,20 @@ Eigen::Matrix3f chess::Tic::CreateValue(float score)
 		value(idx / 3, idx % 3) = score;
 	}
 	return value;
+}
+
+void chess::Tic::SetEmptyOnRole(Eigen::Matrix3f& value)
+{
+	uint16_t pidx = m_nIndex;
+	pidx = ~pidx;
+	pidx &= 0x01FF;
+	while (pidx > 0) {
+		uint16_t t = pidx & (pidx - 1);
+		uint16_t idx = std::log2(t ^ pidx);
+		pidx = t;
+
+		value(idx / 3, idx % 3) = 0.0f;
+	}
 }
 
 bool chess::Tic::Turn(RoleType role, int idx)
