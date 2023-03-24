@@ -16,7 +16,7 @@ QTable::~QTable()
 
 void QTable::Create()
 {
-	int times = 70000;
+	int times = 50000;
 
 	std::array<int, 9> bd;
 	for (int i = 0; i <= times; i++) {
@@ -57,7 +57,8 @@ void QTable::Create()
 			// 如果是新局面,则插入新状态
 			if (pItem == m_mStore.end()) {
 				pItem = m_mStore.insert({ bd, Matrix3f::Zero() }).first;
-				idxpos = m_nRule.RandomPos();
+				//idxpos = m_nRule.RandomPos();
+				idxpos = m_nRule.NextPos();
 			}
 			// 使用本轮Q值最大的位置
 			else {
@@ -67,7 +68,7 @@ void QTable::Create()
 			// 本轮是否随机一个位置
 			bool useRandom = (std::random_device()() % 100) < 35;
 			if (useRandom) {
-				idxpos = m_nRule.RandomPos();
+				//idxpos = m_nRule.RandomPos();
 			}
 
 			// 计算该位置的reward
@@ -151,10 +152,15 @@ void QTable::UpdateQTable(STATUS& st, float maxvalue, bool print)
 
 void QTable::Print()
 {
+	// 归一化
+	for (auto& [k, v] : m_mStore) {
+		v = (v.array() + 1.0f) / 2.0f;
+	}
+
 	std::cout << "Q Table size " << m_mStore.size() << std::endl;
 
 	// 测试的开始几步
-	std::vector<int> steps = {4,5};
+	std::vector<int> steps = {0,8};
 
 	int times = 1;
 	for (int i = 0; i < times; i++) {

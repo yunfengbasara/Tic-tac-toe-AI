@@ -30,20 +30,24 @@ namespace chess
 		}QITEM;
 
 		void Create();
+		void Print();
 
 	private:
 		size_t BufferSize();
-		void Generate();
+		void Generate(float explore);
 		void Shuffle();
-		PREPLAY UpdateBuffer(const BOARD& board, const VALUE& value);
+		void GetReplay(
+			const BOARD& board, 
+			PREPLAY& pReplay,
+			bool bByNeural = false);
 		void ClearBuffer();
+		void Train();
 
 		void UpdateQTable(QITEM& item, float score);
+		void GetValueByNeural(const BOARD& board, VALUE& value);
 
 	private:
 		chess::Tic m_nRule;
-
-		int m_nMaxReplaySize;
 
 		std::map<BOARD, PREPLAY> m_mReplayIndex;
 		std::queue<PREPLAY> m_vReplayPool;

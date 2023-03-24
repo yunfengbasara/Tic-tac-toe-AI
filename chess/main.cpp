@@ -56,6 +56,7 @@ int main() {
 
     DQN dqn;
     dqn.Create();
+    dqn.Print();
     return 0;
 
 
