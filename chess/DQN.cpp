@@ -10,8 +10,8 @@ DQN::DQN()
 {
 	srand((unsigned int)time(0));
 	m_nNeural.SetCostType(NeuralEx::CrossEntropy);
-	m_nNeural.InitBuild({ 9, 100, 9 });
-	m_nNeural.SetLearnRate(0.1);
+	m_nNeural.InitBuild({ NEURALDIM, 160, BOARDDIM });
+	m_nNeural.SetLearnRate(0.01);
 	m_nNeural.SetRegularization(5.0);
 }
 
@@ -31,59 +31,56 @@ void DQN::Create()
 		
 		int sz = BufferSize();
 		if (sz >= 1000 && sz < 2000) {
-			explore = 0.27;
+			explore = 0.31;
 		}
 		else if (sz >= 2000 && sz < 3000) {
-			explore = 0.20;
+			explore = 0.27;
 		}
 		else if (sz >= 3000) {
-			explore = 0.15;
+			explore = 0.20;
 		}
 	}
 	Train();
 
 	std::cout << "size:" << BufferSize() << std::endl;
 
-	// 输入接近，导致无法区分
-	//Matrix3i board1;
-	//board1 << 1, 2, 1,
-	//	 0, 0, 0,
-	//	 1, 2, 2;
-
 	//PREPLAY pReplay1 = new REPLAY();
-	//memcpy(&pReplay1->board[0], board1.data(), m_nRule.BDSZ());
-	//pReplay1->value << 
-	//	0.0, 0.0, 0.0,
-	//	0.0, 0.9, 0.0,
-	//	0.0, 0.0, 0.0;
+	//pReplay1->neuralboard.fill(0);
+	//for (int i = 0; i < 10; i++) {
+	//	pReplay1->neuralboard[i] = 1000;
+	//}
+	//pReplay1->bufferboard.fill(0);
+
+	//pReplay1->value.setZero();
+	//pReplay1->value(1, 1) = 0.78;
+	//pReplay1->value(0, 0) = 0.34;
 
 	//m_vReplayStore.push_back(pReplay1);
-	//m_mReplayIndex.insert({ pReplay1->board, pReplay1 });
-
-	//Matrix3i board2;
-	//board2 << 0, 0, 0,
-	//	0, 0, 0,
-	//	0, 0, 0;
+	//m_mReplayIndex.insert({ pReplay1->bufferboard, pReplay1 });
 
 	//PREPLAY pReplay2 = new REPLAY();
-	//memcpy(&pReplay2->board[0], board2.data(), m_nRule.BDSZ());
-	//pReplay2->value <<
-	//	0.9, 0.9, 0.9,
-	//	0.9, 0.0, 0.9,
-	//	0.9, 0.9, 0.9;
+	//pReplay2->neuralboard.fill(0);
+	//for (int i = 10; i < 20; i++) {
+	//	pReplay2->neuralboard[i] = 1000;
+	//}
+	//pReplay2->bufferboard.fill(1);
+
+	//pReplay2->value.setConstant(1);
+	//pReplay2->value(1, 1) = 0.56;
+	//pReplay2->value(0, 0) = 0.11;
 
 	//m_vReplayStore.push_back(pReplay2);
-	//m_mReplayIndex.insert({ pReplay2->board, pReplay2 });
+	//m_mReplayIndex.insert({ pReplay2->bufferboard, pReplay2 });
 
 	//std::cout << BufferSize() << std::endl;
 
 	//Train();
 
 	//VALUE neuralval;
-	//GetValueByNeural(pReplay1->board, neuralval);
+	//GetValueByNeural(pReplay1->neuralboard, neuralval);
 	//std::cout << neuralval << std::endl;
-	//GetValueByNeural(pReplay2->board, neuralval);
-	//std::cout << neuralval << std::endl;;
+	//GetValueByNeural(pReplay2->neuralboard, neuralval);
+	//std::cout << neuralval << std::endl;
 }
 
 void DQN::Print()
@@ -93,33 +90,38 @@ void DQN::Print()
 
 	m_nRule.Reset();
 
-	BOARD board{};
+	BUFFERBOARD buffer{};
+	NEURALBOARD neural{};
+	VALUE bufferval;
+	VALUE neuralval;
+
 	Tic::GameType res = Tic::UNOVER;
 	Tic::RoleType role = Tic::CROSS;
 
 	for (int i = 0; res == Tic::UNOVER; i++) {
 		const auto& eibd = role == Tic::CROSS ?
 			m_nRule.Board() : m_nRule.RBoard();
-		memcpy(&board[0], eibd.data(), m_nRule.BDSZ());
+		memcpy(&buffer[0], eibd.data(), m_nRule.BDSZ());
 
-		VALUE neuralval;
-		GetValueByNeural(board, neuralval);
+		const auto& einbd = role == Tic::CROSS ?
+			m_nRule.NeuralBoard() : m_nRule.RNeuralBoard();
+		memcpy(&neural[0], einbd.data(), m_nRule.NBDSZ());
 
-		PREPLAY pReplay = NULL;
-		GetReplay(board, pReplay);
+		
+		GetValueByNeural(neural, neuralval);
+		GetValueByBuffer(buffer, bufferval);
 
 		// print
 		std::cout << m_nRule.Board() << std::endl;
-		std::cout << "board value" << std::endl;
-		std::cout << pReplay->value << std::endl;
+		std::cout << "table value" << std::endl;
+		std::cout << bufferval << std::endl;
 
 		std::cout << "neural value" << std::endl;
 		std::cout << neuralval << std::endl;
 		std::cout << "-----" << std::endl;
 
-		float score;
 		int row, col, pos;
-		score = m_nRule.GetMaxScore(pReplay->value, row, col);
+		m_nRule.GetMaxScore(bufferval, row, col);
 		pos = row * 3 + col;
 
 		if (i < steps.size()) {
@@ -147,7 +149,8 @@ void DQN::Generate(float explore)
 	QITEM cross{ NULL, -1, 0.0f };
 	QITEM circle{ NULL, -1, 0.0f };
 
-	BOARD board{};
+	BUFFERBOARD buffer{};
+	NEURALBOARD neural{};
 	PREPLAY pReplay = NULL;
 
 	Tic::GameType res = Tic::UNOVER;
@@ -156,11 +159,15 @@ void DQN::Generate(float explore)
 	while (res == Tic::UNOVER) {
 		const auto& eibd = role == Tic::CROSS ?
 			m_nRule.Board() : m_nRule.RBoard();
-		memcpy(&board[0], eibd.data(), m_nRule.BDSZ());
+		memcpy(&buffer[0], eibd.data(), m_nRule.BDSZ());
+
+		const auto& einbd = role == Tic::CROSS ?
+			m_nRule.NeuralBoard() : m_nRule.RNeuralBoard();
+		memcpy(&neural[0], einbd.data(), m_nRule.NBDSZ());
 
 		// 查询buffer中的Q表
 		// 如果没有则通过神经网络生成新Q表
-		GetReplay(board, pReplay);
+		GetReplay(buffer, neural, pReplay);
 
 		// 选择最佳位置
 		float score;
@@ -226,11 +233,12 @@ void DQN::Shuffle()
 }
 
 void DQN::GetReplay(
-	const BOARD& board, 
+	const BUFFERBOARD& buffer,
+	const NEURALBOARD& neural,
 	PREPLAY& pReplay, 
 	bool bByNeural)
 {
-	auto it = m_mReplayIndex.find(board);
+	auto it = m_mReplayIndex.find(buffer);
 	if (it != m_mReplayIndex.end()) {
 		pReplay = it->second;
 		return;
@@ -247,9 +255,10 @@ void DQN::GetReplay(
 		m_vReplayStore.push_back(pReplay);
 	}
 
-	m_mReplayIndex.insert({ board, pReplay });
+	m_mReplayIndex.insert({ buffer, pReplay });
 	
-	pReplay->board = board;
+	pReplay->bufferboard = buffer;
+	pReplay->neuralboard = neural;
 
 	// 默认赋值
 	if (!bByNeural) {
@@ -257,7 +266,7 @@ void DQN::GetReplay(
 	}
 	// 通过神经网络赋值
 	else {
-		GetValueByNeural(board, pReplay->value);
+		GetValueByNeural(neural, pReplay->value);
 	}
 	return;
 }
@@ -281,20 +290,37 @@ void DQN::UpdateQTable(QITEM& item, float score)
 	v = (1 - eta) * v + eta * (item.reward + 0.8 * score);
 }
 
-void chess::DQN::GetValueByNeural(const BOARD& board, VALUE& value)
+void chess::DQN::GetValueByNeural(const NEURALBOARD& board, VALUE& value)
 {
-	MatrixXf in(9, 1);
-	MatrixXf out(9, 1);
-	in.col(0) = Map<VectorXi>((int*)board.data(), 9).cast<float>();
+	MatrixXf in(board.size(), 1);
+	MatrixXf out(value.size(), 1);
+	in.col(0) = Map<VectorXi>((int*)board.data(), board.size()).cast<float>();
 	m_nNeural.CalcActive(in, out);
 	value = Map<Matrix3f>((float*)out.col(0).data());
+}
+
+void chess::DQN::GetValueByBuffer(const BUFFERBOARD& board, VALUE& value)
+{
+	auto it = m_mReplayIndex.find(board);
+	if (it != m_mReplayIndex.end()) {
+		value = it->second->value;
+		return;
+	}
+
+	value.setZero();
 }
 
 void DQN::Train()
 {
 	// 归一化
 	for (const auto& pReplay : m_vReplayStore) {
-		pReplay->value = (pReplay->value.array() + 1.0f) / 2.0f;
+		//pReplay->value = (pReplay->value.array() + 1.0f) / 2.0f;
+		for (int i = 0; i < pReplay->value.array().size(); i++) {
+			float val = pReplay->value.array()(i);
+			if (val > 0.000001 || val < -0.000001) {
+				pReplay->value.array()(i) = (val + 1.0f) / 2.0f;
+			}
+		}
 	}
 
 	// 样本总数
@@ -304,8 +330,8 @@ void DQN::Train()
 	int epochs = 100;
 	int batch = 32;
 
-	MatrixXf mi(9, batch);
-	MatrixXf mt(9, batch);
+	MatrixXf mi(NEURALDIM, batch);
+	MatrixXf mt(BOARDDIM, batch);
 	MatrixXf so;
 	float loss = 0;
 
@@ -329,8 +355,12 @@ void DQN::Train()
 
 			for (int m = 0; m < sz; m++) {
 				const PREPLAY& pReplay = m_vReplayStore[k + m];
-				mi.col(m) = Map<VectorXi>((int*)pReplay->board.data(), 9).cast<float>();
-				mt.col(m) = Map<VectorXf>((float*)pReplay->value.data(), 9);
+
+				mi.col(m) = Map<VectorXi>((int*)pReplay->neuralboard.data(), 
+					pReplay->neuralboard.size()).cast<float>();
+
+				mt.col(m) = Map<VectorXf>((float*)pReplay->value.data(), 
+					pReplay->value.size());
 			}
 
 			if (!m_nNeural.SetSample(mi, mt)) {
@@ -340,7 +370,7 @@ void DQN::Train()
 			m_nNeural.SGD();
 		}
 
-		//m_nNeural.CompareSample(mi, mt, so, loss);
-		//std::cout << "loss " << loss << std::endl;
+		m_nNeural.CompareSample(mi, mt, so, loss);
+		std::cout << "loss " << loss << " epoch:" << i << std::endl;
 	}
 }

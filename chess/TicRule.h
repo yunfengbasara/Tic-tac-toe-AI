@@ -23,9 +23,16 @@ namespace chess
 		Tic();
 		~Tic();
 
+		// 方便神经网络的输入(原棋盘扩大100倍)
+		typedef Eigen::Matrix<int, 3, 300> NEURALBOARD;
+
 		const Eigen::Matrix3i& Board();
 		const Eigen::Matrix3i& RBoard();
 		const int BDSZ();
+
+		const NEURALBOARD& NeuralBoard();
+		const NEURALBOARD& RNeuralBoard();
+		const int NBDSZ();
 
 		// 重置
 		void Reset();
@@ -77,5 +84,9 @@ namespace chess
 
 		// 反转棋盘,便于快速获取反转棋盘
 		Eigen::Matrix3i	m_nRBoard;
+
+		// 方便神经网络的输入(原棋盘扩大10倍)
+		NEURALBOARD m_nNeuralBoard;
+		NEURALBOARD m_nRNeuralBoard;
 	};
 }

@@ -23,6 +23,10 @@ void chess::Tic::Reset()
 	m_nBoard.setZero();
 
 	m_nRBoard.setZero();
+
+	m_nNeuralBoard.setZero();
+
+	m_nRNeuralBoard.setZero();
 }
 
 const Eigen::Matrix3i& chess::Tic::Board()
@@ -38,6 +42,21 @@ const Eigen::Matrix3i& chess::Tic::RBoard()
 const int chess::Tic::BDSZ()
 {
 	return sizeof(int) * m_nBoard.size();
+}
+
+const chess::Tic::NEURALBOARD& chess::Tic::NeuralBoard()
+{
+	return m_nNeuralBoard;
+}
+
+const chess::Tic::NEURALBOARD& chess::Tic::RNeuralBoard()
+{
+	return m_nRNeuralBoard;
+}
+
+const int chess::Tic::NBDSZ()
+{
+	return sizeof(int) * m_nNeuralBoard.size();
 }
 
 bool chess::Tic::Create(
@@ -163,6 +182,15 @@ bool chess::Tic::Turn(RoleType role, int idx)
 	int rn = role != CROSS ? 1 : 2;
 	m_nRBoard(idx / 3, idx % 3) = rn;
 
+	// 输入给神经网络的局面制造一些差异
+	int nx = role == CROSS ? 1000 : -1000;
+	int rnx = role != CROSS ? 1000 : -1000;
+
+	for (int i = 0; i < 100; i++) {
+		int y = (idx % 3) * 100 + i;
+		m_nNeuralBoard(idx / 3, y) = nx * i;
+		m_nRNeuralBoard(idx / 3, y) = rnx * i;
+	}
 	return true;
 }
 
@@ -180,6 +208,12 @@ bool chess::Tic::Revoke(int idx)
 	m_nBoard(idx / 3, idx % 3) = 0;
 
 	m_nRBoard(idx / 3, idx % 3) = 0;
+
+	for (int i = 0; i < 10; i++) {
+		int y = (idx % 3) * 10 + i;
+		m_nNeuralBoard(idx / 3, y) = 0;
+		m_nRNeuralBoard(idx / 3, y) = 0;
+	}
 
 	return true;
 }
@@ -242,4 +276,5 @@ Tic::GameType chess::Tic::Check(int idx)
 void chess::Tic::Reverse()
 {
 	std::swap(m_nBoard, m_nRBoard);
+	std::swap(m_nNeuralBoard, m_nRNeuralBoard);
 }

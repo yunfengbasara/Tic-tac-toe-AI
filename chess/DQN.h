@@ -9,17 +9,23 @@
 
 namespace chess
 {
+	// 神经网络输入为棋盘100倍大小,增加局面的区分度
+	#define NEURALDIM	900
+	#define BOARDDIM	9
+
 	class DQN 
 	{
 	public:
 		DQN();
 		~DQN();
 
-		typedef std::array<int, 9> BOARD;
+		typedef std::array<int, NEURALDIM> NEURALBOARD;
+		typedef std::array<int, BOARDDIM> BUFFERBOARD;
 		typedef Eigen::Matrix3f VALUE;
 
 		typedef struct {
-			BOARD board;
+			BUFFERBOARD bufferboard;
+			NEURALBOARD neuralboard;
 			VALUE value;
 		}REPLAY, *PREPLAY;
 
@@ -36,20 +42,22 @@ namespace chess
 		size_t BufferSize();
 		void Generate(float explore);
 		void Shuffle();
-		void GetReplay(
-			const BOARD& board, 
-			PREPLAY& pReplay,
-			bool bByNeural = false);
 		void ClearBuffer();
 		void Train();
-
 		void UpdateQTable(QITEM& item, float score);
-		void GetValueByNeural(const BOARD& board, VALUE& value);
+
+		void GetReplay(
+			const BUFFERBOARD& buffer,
+			const NEURALBOARD& neural,
+			PREPLAY& pReplay,
+			bool bByNeural = false);
+		void GetValueByNeural(const NEURALBOARD& board, VALUE& value);
+		void GetValueByBuffer(const BUFFERBOARD& board, VALUE& value);
 
 	private:
 		chess::Tic m_nRule;
 
-		std::map<BOARD, PREPLAY> m_mReplayIndex;
+		std::map<BUFFERBOARD, PREPLAY> m_mReplayIndex;
 		std::queue<PREPLAY> m_vReplayPool;
 		std::vector<PREPLAY> m_vReplayStore;
 

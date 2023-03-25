@@ -234,7 +234,7 @@ bool util::NeuralEx::CalcActive(
     HOSTMatrix& in, 
     HOSTMatrix& out)
 {
-    if (!SetSample(in, in)) {
+    if (!SetSample(in, out)) {
         return false;
     }
 
