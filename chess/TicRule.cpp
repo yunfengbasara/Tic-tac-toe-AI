@@ -183,8 +183,8 @@ bool chess::Tic::Turn(RoleType role, int idx)
 	m_nRBoard(idx / 3, idx % 3) = rn;
 
 	// 输入给神经网络的局面制造一些差异(数值增大)
-	int nx = role == CROSS ? 100 : 200;
-	int rnx = role != CROSS ? 100 : 200;
+	int nx = role == CROSS ? 10 : 20;
+	int rnx = role != CROSS ? 10 : 20;
 	m_nNeuralBoard(idx / 3, idx % 3) = nx;
 	m_nRNeuralBoard(idx / 3, idx % 3) = rnx;
 	return true;

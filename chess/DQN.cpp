@@ -264,7 +264,7 @@ void DQN::GetReplay(
 
 	// 默认赋值
 	if (!bByNeural) {
-		pReplay->value.setZero();
+		GetValueByBuffer(buffer, pReplay->value);
 	}
 	// 通过神经网络赋值
 	else {
@@ -299,6 +299,7 @@ void chess::DQN::GetValueByNeural(const NEURALBOARD& board, VALUE& value)
 	in.col(0) = Map<VectorXi>((int*)board.data(), board.size()).cast<float>();
 	m_nNeural.CalcActive(in, out);
 	value = Map<Matrix3f>((float*)out.col(0).data());
+	m_nRule.SetEmptyOnRole(value);
 }
 
 void chess::DQN::GetValueByBuffer(const BUFFERBOARD& board, VALUE& value)
@@ -309,28 +310,52 @@ void chess::DQN::GetValueByBuffer(const BUFFERBOARD& board, VALUE& value)
 		return;
 	}
 
-	value.setZero();
+	// 采用全0初始化
+	//value.setZero();
+
+	// 采用随机初始值Q表
+	value.setRandom();
+	// 将走过的位置置0
+	m_nRule.SetEmptyOnRole(value);
 }
 
 void DQN::Train()
 {
 	// 归一化
 	for (const auto& pReplay : m_vReplayStore) {
-		//pReplay->value = (pReplay->value.array() + 1.0f) / 2.0f;
+		//// 0无需归一化处理策略
+		//for (int i = 0; i < pReplay->value.array().size(); i++) {
+		//	float val = pReplay->value.array()(i);
+		//	if (val > 0.000001 || val < -0.000001) {
+		//		pReplay->value.array()(i) = (val + 1.0f) / 2.0f;
+		//	}
+		//}
+		// 只保留最大值策略
+		int k = 0;
+		float f = 0;
 		for (int i = 0; i < pReplay->value.array().size(); i++) {
 			float val = pReplay->value.array()(i);
-			if (val > 0.000001 || val < -0.000001) {
-				pReplay->value.array()(i) = (val + 1.0f) / 2.0f;
+			if (val < 0.000001 && val > -0.000001) {
+				continue;
 			}
+
+			// 归一化处理
+			val = (val + 1.0f) / 2.0f;
+			if (val > f) {
+				f = val;
+				k = i;
+			}
+			pReplay->value.array()(i) = 0;
 		}
+		pReplay->value.array()(k) = f;
 	}
 
 	// 样本总数
 	size_t count = BufferSize();
 	m_nNeural.SetTotalItem(count);
 
-	int epochs = 300;
-	int batch = 16;
+	int epochs = 100;
+	int batch = 32;
 
 	MatrixXf mi(NEURALDIM, batch);
 	MatrixXf mt(BOARDDIM, batch);
