@@ -9,8 +9,7 @@
 
 namespace chess
 {
-	// 神经网络输入为棋盘100倍大小,增加局面的区分度
-	#define NEURALDIM	900
+	#define NEURALDIM	9
 	#define BOARDDIM	9
 
 	class DQN 
@@ -19,7 +18,9 @@ namespace chess
 		DQN();
 		~DQN();
 
+		// 神经网络输入
 		typedef std::array<int, NEURALDIM> NEURALBOARD;
+		// 真实棋盘
 		typedef std::array<int, BOARDDIM> BUFFERBOARD;
 		typedef Eigen::Matrix3f VALUE;
 

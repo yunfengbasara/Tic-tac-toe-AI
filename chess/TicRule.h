@@ -23,15 +23,12 @@ namespace chess
 		Tic();
 		~Tic();
 
-		// 方便神经网络的输入(原棋盘扩大100倍)
-		typedef Eigen::Matrix<int, 3, 300> NEURALBOARD;
-
 		const Eigen::Matrix3i& Board();
 		const Eigen::Matrix3i& RBoard();
 		const int BDSZ();
 
-		const NEURALBOARD& NeuralBoard();
-		const NEURALBOARD& RNeuralBoard();
+		const Eigen::Matrix3i& NeuralBoard();
+		const Eigen::Matrix3i& RNeuralBoard();
 		const int NBDSZ();
 
 		// 重置
@@ -86,7 +83,7 @@ namespace chess
 		Eigen::Matrix3i	m_nRBoard;
 
 		// 方便神经网络的输入(原棋盘扩大10倍)
-		NEURALBOARD m_nNeuralBoard;
-		NEURALBOARD m_nRNeuralBoard;
+		Eigen::Matrix3i m_nNeuralBoard;
+		Eigen::Matrix3i m_nRNeuralBoard;
 	};
 }

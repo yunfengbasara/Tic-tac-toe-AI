@@ -44,12 +44,12 @@ const int chess::Tic::BDSZ()
 	return sizeof(int) * m_nBoard.size();
 }
 
-const chess::Tic::NEURALBOARD& chess::Tic::NeuralBoard()
+const Eigen::Matrix3i& chess::Tic::NeuralBoard()
 {
 	return m_nNeuralBoard;
 }
 
-const chess::Tic::NEURALBOARD& chess::Tic::RNeuralBoard()
+const Eigen::Matrix3i& chess::Tic::RNeuralBoard()
 {
 	return m_nRNeuralBoard;
 }
@@ -182,15 +182,11 @@ bool chess::Tic::Turn(RoleType role, int idx)
 	int rn = role != CROSS ? 1 : 2;
 	m_nRBoard(idx / 3, idx % 3) = rn;
 
-	// 输入给神经网络的局面制造一些差异
-	int nx = role == CROSS ? 1000 : -1000;
-	int rnx = role != CROSS ? 1000 : -1000;
-
-	for (int i = 0; i < 100; i++) {
-		int y = (idx % 3) * 100 + i;
-		m_nNeuralBoard(idx / 3, y) = nx * i;
-		m_nRNeuralBoard(idx / 3, y) = rnx * i;
-	}
+	// 输入给神经网络的局面制造一些差异(数值增大)
+	int nx = role == CROSS ? 100 : 200;
+	int rnx = role != CROSS ? 100 : 200;
+	m_nNeuralBoard(idx / 3, idx % 3) = nx;
+	m_nRNeuralBoard(idx / 3, idx % 3) = rnx;
 	return true;
 }
 
@@ -209,11 +205,9 @@ bool chess::Tic::Revoke(int idx)
 
 	m_nRBoard(idx / 3, idx % 3) = 0;
 
-	for (int i = 0; i < 10; i++) {
-		int y = (idx % 3) * 10 + i;
-		m_nNeuralBoard(idx / 3, y) = 0;
-		m_nRNeuralBoard(idx / 3, y) = 0;
-	}
+	m_nNeuralBoard(idx / 3, idx % 3) = 0;
+
+	m_nRNeuralBoard(idx / 3, idx % 3) = 0;
 
 	return true;
 }

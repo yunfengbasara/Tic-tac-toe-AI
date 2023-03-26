@@ -11,7 +11,7 @@ DQN::DQN()
 	srand((unsigned int)time(0));
 	m_nNeural.SetCostType(NeuralEx::CrossEntropy);
 	m_nNeural.InitBuild({ NEURALDIM, 160, BOARDDIM });
-	m_nNeural.SetLearnRate(0.01);
+	m_nNeural.SetLearnRate(0.1);
 	m_nNeural.SetRegularization(5.0);
 }
 
@@ -44,30 +44,31 @@ void DQN::Create()
 
 	std::cout << "size:" << BufferSize() << std::endl;
 
+	// 两组数据无法拟合，这就离谱
 	//PREPLAY pReplay1 = new REPLAY();
 	//pReplay1->neuralboard.fill(0);
-	//for (int i = 0; i < 10; i++) {
-	//	pReplay1->neuralboard[i] = 1000;
+	//for (int i = 0; i < 9; i++) {
+	//	pReplay1->neuralboard[i] = 100;
 	//}
 	//pReplay1->bufferboard.fill(0);
 
 	//pReplay1->value.setZero();
-	//pReplay1->value(1, 1) = 0.78;
 	//pReplay1->value(0, 0) = 0.34;
+	//pReplay1->value(1, 1) = 0.78;
 
 	//m_vReplayStore.push_back(pReplay1);
 	//m_mReplayIndex.insert({ pReplay1->bufferboard, pReplay1 });
 
 	//PREPLAY pReplay2 = new REPLAY();
 	//pReplay2->neuralboard.fill(0);
-	//for (int i = 10; i < 20; i++) {
-	//	pReplay2->neuralboard[i] = 1000;
+	//for (int i = 0; i < 9; i++) {
+	//	pReplay2->neuralboard[i] = i;
 	//}
 	//pReplay2->bufferboard.fill(1);
 
 	//pReplay2->value.setConstant(1);
-	//pReplay2->value(1, 1) = 0.56;
 	//pReplay2->value(0, 0) = 0.11;
+	//pReplay2->value(1, 1) = 0.56;
 
 	//m_vReplayStore.push_back(pReplay2);
 	//m_mReplayIndex.insert({ pReplay2->bufferboard, pReplay2 });
@@ -86,7 +87,7 @@ void DQN::Create()
 void DQN::Print()
 {
 	// 测试的开始几步
-	std::vector<int> steps = { 0,8 };
+	std::vector<int> steps = {0,8 };
 
 	m_nRule.Reset();
 
@@ -120,8 +121,9 @@ void DQN::Print()
 		std::cout << neuralval << std::endl;
 		std::cout << "-----" << std::endl;
 
+		// 采用神经网络的策略下棋
 		int row, col, pos;
-		m_nRule.GetMaxScore(bufferval, row, col);
+		m_nRule.GetMaxScore(neuralval, row, col);
 		pos = row * 3 + col;
 
 		if (i < steps.size()) {
@@ -327,8 +329,8 @@ void DQN::Train()
 	size_t count = BufferSize();
 	m_nNeural.SetTotalItem(count);
 
-	int epochs = 100;
-	int batch = 32;
+	int epochs = 300;
+	int batch = 16;
 
 	MatrixXf mi(NEURALDIM, batch);
 	MatrixXf mt(BOARDDIM, batch);
@@ -370,7 +372,7 @@ void DQN::Train()
 			m_nNeural.SGD();
 		}
 
-		m_nNeural.CompareSample(mi, mt, so, loss);
-		std::cout << "loss " << loss << " epoch:" << i << std::endl;
+		//m_nNeural.CompareSample(mi, mt, so, loss);
+		//std::cout << "loss " << loss << " epoch:" << i << std::endl;
 	}
 }
